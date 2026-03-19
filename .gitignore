@@ -1,0 +1,45 @@
+# dependencies
+node_modules/
+**/node_modules/
+
+# build outputs
+.next/
+out/
+dist/
+build/
+coverage/
+artifacts/
+cache/
+typechain/
+typechain-types/
+
+# environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# hardhat / solidity
+coverage.json
+openzeppelin-upgrades.json
+
+# frontend misc
+.vercel/
+
+# temp files
+*.tmp
+*.temp
