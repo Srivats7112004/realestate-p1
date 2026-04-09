@@ -25,6 +25,50 @@ contract Escrow {
 
     mapping(uint256 => Listing) public listings;
 
+    event PropertyListed(
+        uint256 indexed nftID,
+        address indexed seller,
+        uint256 purchasePrice,
+        uint256 escrowAmount,
+        uint256 timestamp
+    );
+
+    event EarnestDeposited(
+        uint256 indexed nftID,
+        address indexed buyer,
+        uint256 amount,
+        uint256 timestamp
+    );
+
+    event InspectionStatusUpdated(
+        uint256 indexed nftID,
+        address indexed inspector,
+        bool passed,
+        uint256 timestamp
+    );
+
+    event SaleApprovalUpdated(
+        uint256 indexed nftID,
+        address indexed approver,
+        bool lenderApproved,
+        bool sellerApproved,
+        uint256 timestamp
+    );
+
+    event PropertyVerified(
+        uint256 indexed nftID,
+        address indexed government,
+        uint256 timestamp
+    );
+
+    event SaleFinalized(
+        uint256 indexed nftID,
+        address indexed seller,
+        address indexed buyer,
+        uint256 amount,
+        uint256 timestamp
+    );
+
     constructor(
         address _nftAddress,
         address _inspector,
@@ -37,7 +81,6 @@ contract Escrow {
         government = _government;
     }
 
-    // Seller lists a property
     function list(
         uint256 _nftID,
         uint256 _purchasePrice,
@@ -48,8 +91,8 @@ contract Escrow {
 
         listings[_nftID] = Listing(
             true,
-            payable(msg.sender),      // seller
-            payable(address(0)),      // buyer
+            payable(msg.sender),
+            payable(address(0)),
             _purchasePrice,
             _escrowAmount,
             false,
@@ -57,9 +100,16 @@ contract Escrow {
             false,
             false
         );
+
+        emit PropertyListed(
+            _nftID,
+            msg.sender,
+            _purchasePrice,
+            _escrowAmount,
+            block.timestamp
+        );
     }
 
-    // Buyer deposits earnest/full payment
     function depositEarnest(uint256 _nftID) public payable {
         Listing storage item = listings[_nftID];
 
@@ -68,17 +118,19 @@ contract Escrow {
         require(msg.value >= item.escrowAmount, "Not enough earnest money");
 
         item.buyer = payable(msg.sender);
+
+        emit EarnestDeposited(_nftID, msg.sender, msg.value, block.timestamp);
     }
 
-    // Inspector approves inspection
     function updateInspectionStatus(uint256 _nftID, bool _passed) public {
         require(msg.sender == inspector, "Only inspector can update status");
         require(listings[_nftID].isListed, "Property not listed");
 
         listings[_nftID].inspectionPassed = _passed;
+
+        emit InspectionStatusUpdated(_nftID, msg.sender, _passed, block.timestamp);
     }
 
-    // Lender or Seller approves sale
     function approveSale(uint256 _nftID) public {
         Listing storage item = listings[_nftID];
         require(item.isListed, "Property not listed");
@@ -90,21 +142,30 @@ contract Escrow {
         } else {
             revert("Not authorized to approve sale");
         }
+
+        emit SaleApprovalUpdated(
+            _nftID,
+            msg.sender,
+            item.lenderApproved,
+            item.sellerApproved,
+            block.timestamp
+        );
     }
 
-    // Government verifies ownership
     function verifyProperty(uint256 _nftID) public {
         require(msg.sender == government, "Only government can verify");
         require(listings[_nftID].isListed, "Property not listed");
 
         listings[_nftID].governmentVerified = true;
+
+        emit PropertyVerified(_nftID, msg.sender, block.timestamp);
     }
 
-    // Finalize sale
     function finalizeSale(uint256 _nftID) public {
         Listing storage item = listings[_nftID];
 
         require(item.isListed, "Property not listed");
+        require(msg.sender == item.seller, "Only seller can finalize sale");
         require(item.buyer != address(0), "Buyer has not deposited funds");
         require(item.inspectionPassed, "Inspection failed");
         require(item.lenderApproved, "Lender not approved");
@@ -112,15 +173,20 @@ contract Escrow {
         require(item.sellerApproved, "Seller not approved");
         require(address(this).balance >= item.purchasePrice, "Insufficient funds");
 
-        // transfer funds to seller
         (bool success, ) = item.seller.call{value: item.purchasePrice}("");
         require(success, "Transfer failed");
 
-        // transfer NFT to buyer
         IERC721(nftAddress).transferFrom(item.seller, item.buyer, _nftID);
 
-        // mark listing as sold
         item.isListed = false;
+
+        emit SaleFinalized(
+            _nftID,
+            item.seller,
+            item.buyer,
+            item.purchasePrice,
+            block.timestamp
+        );
     }
 
     receive() external payable {}

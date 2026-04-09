@@ -1,4 +1,3 @@
-// frontend/components/ListPropertyForm.js
 import { useState } from "react";
 import { ethers } from "ethers";
 import { useWeb3 } from "../context/Web3Context";
@@ -7,7 +6,16 @@ import { ESCROW_ADDRESS, PROPERTY_TYPES } from "../utils/constants";
 import KYCBadge from "./KYCBadge";
 
 export default function ListPropertyForm({ onSuccess }) {
-  const { account, provider, realEstate, escrow, isKYCVerified, requestKYC } = useWeb3();
+  const {
+    account,
+    provider,
+    realEstate,
+    escrow,
+    userRole,
+    canUseConnectedWallet,
+    linkedWallet,
+    loadBlockchainData,
+  } = useWeb3();
 
   const [formData, setFormData] = useState({
     name: "",
@@ -29,44 +37,110 @@ export default function ListPropertyForm({ onSuccess }) {
   const [useSimpleMode, setUseSimpleMode] = useState(false);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormData((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }));
   };
 
   const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => setImagePreview(reader.result);
-      reader.readAsDataURL(file);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImageFile(file);
+
+    const reader = new FileReader();
+    reader.onloadend = () => setImagePreview(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      description: "",
+      location: "",
+      propertyType: "Residential",
+      area: "",
+      bedrooms: "",
+      bathrooms: "",
+      yearBuilt: "",
+      price: "",
+    });
+    setImageFile(null);
+    setDocumentFile(null);
+    setImagePreview(null);
+  };
+
+  const extractTokenIdFromReceipt = (receipt, contract) => {
+    if (!receipt?.logs?.length) return null;
+
+    for (const log of receipt.logs) {
+      try {
+        const parsed = contract.interface.parseLog(log);
+
+        if (parsed && parsed.name === "Transfer") {
+          const tokenId = parsed.args?.tokenId ?? parsed.args?.[2];
+          if (tokenId) {
+            return tokenId.toString();
+          }
+        }
+      } catch {
+        // Ignore unrelated logs
+      }
+    }
+
+    return null;
+  };
+
+  const validateBeforeSubmit = () => {
+    if (userRole === "guest") {
+      throw new Error("Please log in before listing a property.");
+    }
+
+    if (userRole !== "user" && userRole !== "admin") {
+      throw new Error(
+        "Only normal users can list properties from this form. Special roles should use their dashboard workflows."
+      );
+    }
+
+    if (!account || !provider || !realEstate || !escrow) {
+      throw new Error("Please connect MetaMask before listing.");
+    }
+
+    if (linkedWallet && !canUseConnectedWallet) {
+      throw new Error(
+        "The connected wallet does not match the wallet linked to your profile. Please reconnect the correct wallet."
+      );
+    }
+
+    if (!imageFile) {
+      throw new Error("Please upload a property image.");
+    }
+
+    if (!formData.price || Number(formData.price) <= 0) {
+      throw new Error("Please enter a valid price.");
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!imageFile || !formData.price) {
-      alert("Please provide an image and price.");
-      return;
-    }
-
-    setIsUploading(true);
-
     try {
+      validateBeforeSubmit();
+      setIsUploading(true);
+
       const signer = provider.getSigner();
       const signerAddress = await signer.getAddress();
 
-      let tokenURI;
+      let tokenURI = "";
 
       if (useSimpleMode) {
-        // Simple mode: just upload image (backward compatible)
         setUploadStep("Uploading image to IPFS...");
         tokenURI = await uploadFileToIPFS(imageFile);
       } else {
-        // Advanced mode: create full metadata JSON
         setUploadStep("Uploading image & metadata to IPFS...");
         const result = await createPropertyMetadata({
-          name: formData.name,
+          name: formData.name || "Untitled Property",
           description: formData.description,
           imageFile,
           location: formData.location,
@@ -77,83 +151,78 @@ export default function ListPropertyForm({ onSuccess }) {
           yearBuilt: formData.yearBuilt,
           documentFile,
         });
-        tokenURI = result.metadataUrl;
+
+        tokenURI = result?.metadataUrl || "";
       }
 
-      if (!tokenURI) throw new Error("IPFS upload failed");
+      if (!tokenURI) {
+        throw new Error("IPFS upload failed. No token URI returned.");
+      }
 
-      // Mint NFT
       setUploadStep("Minting NFT on blockchain...");
-      let tx = await realEstate.connect(signer).mint(tokenURI);
-      await tx.wait();
+      const mintTx = await realEstate.connect(signer).mint(tokenURI);
+      const mintReceipt = await mintTx.wait();
 
-      // Get token ID
-      const totalSupply = await realEstate.totalSupply();
-      const tokenId = totalSupply.toNumber();
+      const tokenId = extractTokenIdFromReceipt(mintReceipt, realEstate);
 
-      // Verify ownership
-      const ownerOfToken = await realEstate.ownerOf(tokenId);
-      if (signerAddress.toLowerCase() !== ownerOfToken.toLowerCase()) {
-        throw new Error("Ownership verification failed after minting");
+      if (!tokenId) {
+        throw new Error(
+          "Could not determine minted token ID from transaction receipt."
+        );
       }
 
-      // Approve escrow
+      setUploadStep("Verifying ownership...");
+      const ownerOfToken = await realEstate.ownerOf(tokenId);
+
+      if (ownerOfToken.toLowerCase() !== signerAddress.toLowerCase()) {
+        throw new Error("Ownership verification failed after minting.");
+      }
+
       setUploadStep("Approving escrow contract...");
-      tx = await realEstate.connect(signer).approve(ESCROW_ADDRESS, tokenId);
-      await tx.wait();
+      const approveTx = await realEstate
+        .connect(signer)
+        .approve(ESCROW_ADDRESS, tokenId);
+      await approveTx.wait();
 
-      // List property
       setUploadStep("Listing property on marketplace...");
-      const ethPrice = ethers.utils.parseEther(formData.price);
-      tx = await escrow.connect(signer).list(tokenId, ethPrice, ethPrice);
-      await tx.wait();
+      const ethPrice = ethers.utils.parseEther(String(formData.price));
+      const listTx = await escrow.connect(signer).list(tokenId, ethPrice, ethPrice);
+      await listTx.wait();
 
-      setUploadStep("");
+      setUploadStep("Refreshing blockchain data...");
+      await loadBlockchainData(false);
+
       alert(`Property #${tokenId} listed successfully!`);
+      resetForm();
 
-      // Reset form
-      setFormData({
-        name: "",
-        description: "",
-        location: "",
-        propertyType: "Residential",
-        area: "",
-        bedrooms: "",
-        bathrooms: "",
-        yearBuilt: "",
-        price: "",
-      });
-      setImageFile(null);
-      setDocumentFile(null);
-      setImagePreview(null);
-
-      if (onSuccess) onSuccess();
+      if (onSuccess) {
+        await onSuccess();
+      }
     } catch (error) {
       console.error("Listing failed:", error);
       alert(error?.reason || error?.message || "Property listing failed.");
+    } finally {
+      setIsUploading(false);
+      setUploadStep("");
     }
-
-    setIsUploading(false);
-    setUploadStep("");
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-8 border border-purple-100 animate-fadeIn">
+    <div className="bg-white rounded-2xl shadow-lg p-8 border border-purple-100">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-2xl font-bold text-purple-700">
           📝 List New Property
         </h3>
 
-        {/* Mode toggle */}
         <label className="flex items-center gap-2 cursor-pointer">
           <span className="text-sm text-slate-500">
             {useSimpleMode ? "Simple" : "Advanced"}
           </span>
           <div
-            className={`relative w-12 h-6 rounded-full transition ${
+            className={`relative w-12 h-6 rounded-full transition cursor-pointer ${
               useSimpleMode ? "bg-slate-300" : "bg-purple-500"
             }`}
-            onClick={() => setUseSimpleMode(!useSimpleMode)}
+            onClick={() => setUseSimpleMode((prev) => !prev)}
           >
             <div
               className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
@@ -164,13 +233,18 @@ export default function ListPropertyForm({ onSuccess }) {
         </label>
       </div>
 
-      {/* KYC Status */}
       <div className="mb-4">
         <KYCBadge address={account} showRequestButton={true} />
       </div>
 
+      {linkedWallet && !canUseConnectedWallet ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          The connected wallet does not match the wallet linked to your profile.
+          Reconnect the correct wallet before listing a property.
+        </div>
+      ) : null}
+
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Image Upload */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Property Image *
@@ -183,18 +257,17 @@ export default function ListPropertyForm({ onSuccess }) {
               className="flex-1 p-2 border rounded-lg text-sm"
               required
             />
-            {imagePreview && (
+            {imagePreview ? (
               <img
                 src={imagePreview}
                 alt="Preview"
                 className="w-20 h-20 object-cover rounded-lg border"
               />
-            )}
+            ) : null}
           </div>
         </div>
 
-        {/* Advanced Fields */}
-        {!useSimpleMode && (
+        {!useSimpleMode ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -210,6 +283,7 @@ export default function ListPropertyForm({ onSuccess }) {
                   className="w-full p-2.5 border rounded-lg text-sm"
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Location
@@ -257,6 +331,7 @@ export default function ListPropertyForm({ onSuccess }) {
                   ))}
                 </select>
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Area (sq ft)
@@ -270,6 +345,7 @@ export default function ListPropertyForm({ onSuccess }) {
                   className="w-full p-2.5 border rounded-lg text-sm"
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Bedrooms
@@ -283,6 +359,7 @@ export default function ListPropertyForm({ onSuccess }) {
                   className="w-full p-2.5 border rounded-lg text-sm"
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Bathrooms
@@ -312,6 +389,7 @@ export default function ListPropertyForm({ onSuccess }) {
                   className="w-full p-2.5 border rounded-lg text-sm"
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Property Document (PDF)
@@ -319,15 +397,14 @@ export default function ListPropertyForm({ onSuccess }) {
                 <input
                   type="file"
                   accept=".pdf,.doc,.docx"
-                  onChange={(e) => setDocumentFile(e.target.files[0])}
+                  onChange={(e) => setDocumentFile(e.target.files?.[0] || null)}
                   className="w-full p-2 border rounded-lg text-sm"
                 />
               </div>
             </div>
           </>
-        )}
+        ) : null}
 
-        {/* Price - always shown */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Price (ETH) *
@@ -344,15 +421,14 @@ export default function ListPropertyForm({ onSuccess }) {
           />
         </div>
 
-        {/* Upload progress */}
-        {uploadStep && (
+        {uploadStep ? (
           <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-center gap-3">
             <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
             <span className="text-sm text-indigo-700 font-medium">
               {uploadStep}
             </span>
           </div>
-        )}
+        ) : null}
 
         <button
           type="submit"

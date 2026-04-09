@@ -4,11 +4,12 @@ import { useRouter } from "next/router";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
-  const { user, login } = useAuth();
+  const { user, register } = useAuth();
 
   const [form, setForm] = useState({
+    name: "",
     email: "",
     password: "",
   });
@@ -34,10 +35,10 @@ export default function LoginPage() {
     setError("");
 
     try {
-      await login(form);
+      await register(form);
       router.push("/profile");
     } catch (err) {
-      setError(err.message || "Login failed");
+      setError(err.message || "Registration failed");
     } finally {
       setSubmitting(false);
     }
@@ -48,8 +49,8 @@ export default function LoginPage() {
       <Navbar />
       <div className="max-w-md mx-auto px-4 py-14">
         <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-100">
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">Login</h1>
-          <p className="text-slate-500 mb-6">Access your BlockEstate account.</p>
+          <h1 className="text-3xl font-bold text-slate-800 mb-2">Create Account</h1>
+          <p className="text-slate-500 mb-6">Start your BlockEstate profile.</p>
 
           {error ? (
             <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -58,6 +59,18 @@ export default function LoginPage() {
           ) : null}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
+              <input
+                type="text"
+                name="name"
+                value={form.name}
+                onChange={handleChange}
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500"
+                required
+              />
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
               <input
@@ -87,14 +100,14 @@ export default function LoginPage() {
               disabled={submitting}
               className="w-full rounded-xl bg-indigo-600 text-white py-3 font-semibold hover:bg-indigo-700 disabled:bg-slate-300"
             >
-              {submitting ? "Logging in..." : "Login"}
+              {submitting ? "Creating account..." : "Register"}
             </button>
           </form>
 
           <p className="text-sm text-slate-500 mt-6">
-            Don&apos;t have an account?{" "}
-            <Link href="/register" className="text-indigo-600 font-semibold hover:text-indigo-800">
-              Register
+            Already have an account?{" "}
+            <Link href="/login" className="text-indigo-600 font-semibold hover:text-indigo-800">
+              Login
             </Link>
           </p>
         </div>

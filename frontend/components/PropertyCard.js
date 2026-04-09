@@ -1,18 +1,31 @@
-// frontend/components/PropertyCard.js
 import Link from "next/link";
-import { ethers } from "ethers";
-import { shortenAddress, isZeroAddress, getCompletionPercentage } from "../utils/helpers";
+import {
+  shortenAddress,
+  isZeroAddress,
+  getCompletionPercentage,
+} from "../utils/helpers";
 import { useWeb3 } from "../context/Web3Context";
-import { ROLES } from "../utils/constants";
 
 export default function PropertyCard({ property, onAction }) {
-  const { account, userRole } = useWeb3();
+  const {
+    account,
+    userRole,
+    canUseConnectedWallet,
+    canUseRoleWallet,
+  } = useWeb3();
 
   const buyerExists = !isZeroAddress(property.buyer);
+
   const isSeller =
-    account &&
-    property.seller &&
+    !!account &&
+    !!property.seller &&
     account.toLowerCase() === property.seller.toLowerCase();
+
+  const isNormalUser = userRole === "user" || userRole === "admin";
+
+  const canShowSellerAction = isNormalUser && isSeller;
+  const canShowBuyerAction = isNormalUser && !isSeller && !property.sold;
+
   const completion = getCompletionPercentage(property);
 
   const getStatusColor = () => {
@@ -25,7 +38,6 @@ export default function PropertyCard({ property, onAction }) {
     <div
       className={`property-card bg-white rounded-2xl shadow-lg overflow-hidden border-2 ${getStatusColor()} animate-fadeIn`}
     >
-      {/* Image */}
       <div className="relative">
         <img
           src={property.image}
@@ -36,13 +48,13 @@ export default function PropertyCard({ property, onAction }) {
           }}
         />
 
-        {/* Badge overlay */}
         <div className="absolute top-3 left-3 flex gap-2">
           {property.governmentVerified && (
             <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full font-semibold">
               ✅ Verified
             </span>
           )}
+
           {property.propertyType && (
             <span className="bg-indigo-500 text-white text-xs px-2 py-1 rounded-full font-semibold">
               {property.propertyType}
@@ -50,7 +62,6 @@ export default function PropertyCard({ property, onAction }) {
           )}
         </div>
 
-        {/* Price badge */}
         <div className="absolute bottom-3 right-3">
           <span className="bg-white/90 backdrop-blur text-indigo-700 font-bold px-3 py-1.5 rounded-lg shadow text-sm">
             {property.price} ETH
@@ -58,25 +69,25 @@ export default function PropertyCard({ property, onAction }) {
         </div>
       </div>
 
-      {/* Content */}
       <div className="p-5">
         <div className="flex items-start justify-between mb-2">
           <div>
             <h3 className="text-lg font-bold text-slate-800">
               {property.name || `Property #${property.id}`}
             </h3>
+
             {property.location && (
               <p className="text-sm text-slate-500 flex items-center gap-1">
                 📍 {property.location}
               </p>
             )}
           </div>
+
           <span className="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded-full">
             #{property.id}
           </span>
         </div>
 
-        {/* Property details */}
         {property.area && (
           <p className="text-xs text-slate-500 mb-2">📐 {property.area} sq ft</p>
         )}
@@ -85,14 +96,12 @@ export default function PropertyCard({ property, onAction }) {
           Seller: {shortenAddress(property.seller)}
         </p>
 
-        {/* Mini progress bar */}
         <div className="mb-3">
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs text-slate-400">Sale Progress</span>
-            <span className="text-xs font-bold text-indigo-600">
-              {completion}%
-            </span>
+            <span className="text-xs font-bold text-indigo-600">{completion}%</span>
           </div>
+
           <div className="w-full bg-slate-100 rounded-full h-1.5">
             <div
               className="bg-indigo-500 h-1.5 rounded-full progress-bar"
@@ -101,7 +110,6 @@ export default function PropertyCard({ property, onAction }) {
           </div>
         </div>
 
-        {/* Quick status */}
         <div className="flex flex-wrap gap-1 mb-4">
           <span
             className={`text-xs px-2 py-0.5 rounded-full ${
@@ -112,6 +120,7 @@ export default function PropertyCard({ property, onAction }) {
           >
             🏛 Gov
           </span>
+
           <span
             className={`text-xs px-2 py-0.5 rounded-full ${
               property.inspectionPassed
@@ -121,15 +130,15 @@ export default function PropertyCard({ property, onAction }) {
           >
             🔍 Inspect
           </span>
+
           <span
             className={`text-xs px-2 py-0.5 rounded-full ${
-              buyerExists
-                ? "bg-green-100 text-green-700"
-                : "bg-slate-100 text-slate-400"
+              buyerExists ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400"
             }`}
           >
             💰 Funded
           </span>
+
           <span
             className={`text-xs px-2 py-0.5 rounded-full ${
               property.lenderApproved
@@ -141,55 +150,60 @@ export default function PropertyCard({ property, onAction }) {
           </span>
         </div>
 
-        {/* Action buttons */}
         <div className="flex gap-2">
-  <Link
-    href={`/property/property-detail?id=${property.id}`}
-    className="flex-1 text-center bg-slate-100 text-slate-700 py-2.5 rounded-lg font-semibold text-sm hover:bg-slate-200 transition"
-  >
-    View Details
-  </Link>
-          {account === ROLES.government && !property.governmentVerified ? (
+          <Link
+            href={`/property/property-detail?id=${property.id}`}
+            className="flex-1 text-center bg-slate-100 text-slate-700 py-2.5 rounded-lg font-semibold text-sm hover:bg-slate-200 transition"
+          >
+            View Details
+          </Link>
+
+          {userRole === "government" ? (
             <button
               onClick={() => onAction("verify", property)}
-              className="flex-1 bg-red-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-red-700 transition"
+              disabled={property.governmentVerified || !canUseRoleWallet}
+              className="flex-1 bg-red-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
             >
-              Verify
+              {property.governmentVerified ? "Verified" : "Verify"}
             </button>
-          ) : account === ROLES.inspector && !property.inspectionPassed ? (
+          ) : userRole === "inspector" ? (
             <button
               onClick={() => onAction("inspect", property)}
-              className="flex-1 bg-orange-500 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-orange-600 transition"
+              disabled={property.inspectionPassed || !canUseRoleWallet}
+              className="flex-1 bg-orange-500 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
             >
-              Inspect
+              {property.inspectionPassed ? "Passed" : "Inspect"}
             </button>
-          ) : account === ROLES.lender && !property.lenderApproved ? (
+          ) : userRole === "lender" ? (
             <button
               onClick={() => onAction("lend", property)}
-              className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-blue-700 transition"
+              disabled={property.lenderApproved || !canUseRoleWallet}
+              className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
             >
-              Approve
+              {property.lenderApproved ? "Approved" : "Approve"}
             </button>
-          ) : isSeller ? (
+          ) : canShowSellerAction ? (
             <button
               onClick={() => onAction("sell", property)}
-              className="flex-1 bg-purple-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-purple-700 transition"
+              disabled={!canUseConnectedWallet}
+              className="flex-1 bg-purple-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
             >
               Finalize
             </button>
-          ) : !buyerExists ? (
+          ) : canShowBuyerAction ? (
             <button
               onClick={() => onAction("buy", property)}
-              className="flex-1 bg-indigo-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-indigo-700 transition"
+              disabled={buyerExists || !canUseConnectedWallet}
+              className="flex-1 bg-indigo-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
             >
-              Buy
+              {buyerExists ? "Funded ✅" : "Buy"}
             </button>
           ) : (
-            <span className="flex-1 text-center bg-green-100 text-green-700 py-2.5 rounded-lg font-semibold text-sm">
-              Funded ✅
+            <span className="flex-1 text-center bg-slate-100 text-slate-500 py-2.5 rounded-lg font-semibold text-sm">
+              No action
             </span>
           )}
-        </div>  
+        </div>
       </div>
     </div>
   );

@@ -1,18 +1,16 @@
-// frontend/pages/property/property-detail.js
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ethers } from "ethers";
-import { useWeb3 } from "../../context/Web3Context"; // Note: ../../ because it's nested
+import { useWeb3 } from "../../context/Web3Context";
 import Navbar from "../../components/Navbar";
 import StatusTimeline from "../../components/StatusTimeline";
+import TransactionHistory from "../../components/TransactionHistory";
+import AIInspectionPanel from "../../components/AIInspectionPanel";
 import { shortenAddress, isZeroAddress } from "../../utils/helpers";
-import { ROLES } from "../../utils/constants";
 
 export default function PropertyDetail() {
   const router = useRouter();
   const { id } = router.query;
-  
-  // ... rest of your code
 
   const {
     account,
@@ -20,20 +18,84 @@ export default function PropertyDetail() {
     escrow,
     properties,
     userRole,
+    canUseConnectedWallet,
+    canUseRoleWallet,
+    requiredRoleWallet,
     loadBlockchainData,
+    loadTransactionHistory,
+    runAIInspection,
   } = useWeb3();
 
   const [property, setProperty] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [aiReport, setAiReport] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
 
   useEffect(() => {
     if (id && properties.length > 0) {
-      const found = properties.find((p) => p.id === parseInt(id));
+      const found = properties.find((p) => p.id === parseInt(id, 10));
       setProperty(found || null);
     }
   }, [id, properties]);
 
+  const refreshHistory = async (tokenId) => {
+    if (!tokenId) return;
+    setHistoryLoading(true);
+    const items = await loadTransactionHistory(tokenId);
+    setHistory(items);
+    setHistoryLoading(false);
+  };
+
+  useEffect(() => {
+    if (property?.id) {
+      refreshHistory(property.id);
+    }
+  }, [property?.id]);
+
+  const buyerExists = useMemo(() => {
+    return property ? !isZeroAddress(property.buyer) : false;
+  }, [property]);
+
+  const isSeller = useMemo(() => {
+    if (!property || !account || !property.seller) return false;
+    return account.toLowerCase() === property.seller.toLowerCase();
+  }, [property, account]);
+
+  const isNormalUser = userRole === "user" || userRole === "admin";
+
+  const canActAsSeller = isNormalUser && isSeller && canUseConnectedWallet;
+  const canActAsBuyer =
+    isNormalUser && !isSeller && !property?.sold && canUseConnectedWallet;
+
+  const showSpecialRoleWarning = useMemo(() => {
+    return ["government", "inspector", "lender"].includes(userRole) && !canUseRoleWallet;
+  }, [userRole, canUseRoleWallet]);
+
   const handleAction = async (action) => {
     try {
+      if (!provider || !escrow) {
+        alert("Wallet or contract not ready.");
+        return;
+      }
+
+      if (["verify", "inspect", "lend"].includes(action) && !canUseRoleWallet) {
+        alert(
+          requiredRoleWallet
+            ? `Your app role is ${userRole}, but the current smart contract still requires the configured ${userRole} wallet:\n${requiredRoleWallet}`
+            : "You cannot perform this action with the currently connected wallet."
+        );
+        return;
+      }
+
+      if (["buy", "sell"].includes(action) && !canUseConnectedWallet) {
+        alert(
+          "The connected wallet does not match the wallet linked to your profile. Reconnect the correct wallet first."
+        );
+        return;
+      }
+
       const signer = provider.getSigner();
 
       switch (action) {
@@ -45,6 +107,7 @@ export default function PropertyDetail() {
           alert("Payment deposited!");
           break;
         }
+
         case "inspect": {
           const tx = await escrow
             .connect(signer)
@@ -53,32 +116,55 @@ export default function PropertyDetail() {
           alert("Inspection approved!");
           break;
         }
+
         case "lend": {
           const tx = await escrow.connect(signer).approveSale(property.id);
           await tx.wait();
           alert("Lender approved!");
           break;
         }
+
         case "verify": {
           const tx = await escrow.connect(signer).verifyProperty(property.id);
           await tx.wait();
           alert("Government verified!");
           break;
         }
+
         case "sell": {
           let tx = await escrow.connect(signer).approveSale(property.id);
           await tx.wait();
+
           tx = await escrow.connect(signer).finalizeSale(property.id);
           await tx.wait();
+
           alert("Sale finalized!");
           break;
         }
+
+        default:
+          break;
       }
 
-      loadBlockchainData();
+      await loadBlockchainData(false);
+      await refreshHistory(property.id);
     } catch (error) {
       console.error(`${action} failed:`, error);
       alert(error?.reason || error?.message || `${action} failed.`);
+    }
+  };
+
+  const handleAIRun = async (selectedProperty) => {
+    try {
+      setAiLoading(true);
+      setAiError("");
+
+      const report = await runAIInspection(selectedProperty);
+      setAiReport(report);
+    } catch (error) {
+      setAiError(error.message || "AI inspection failed.");
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -93,12 +179,6 @@ export default function PropertyDetail() {
       </div>
     );
   }
-
-  const buyerExists = !isZeroAddress(property.buyer);
-  const isSeller =
-    account &&
-    property.seller &&
-    account.toLowerCase() === property.seller.toLowerCase();
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -162,6 +242,7 @@ export default function PropertyDetail() {
                     </div>
                   </div>
                 )}
+
                 {property.area && (
                   <div className="bg-slate-50 p-3 rounded-lg text-center">
                     <div className="text-lg">📐</div>
@@ -180,23 +261,24 @@ export default function PropertyDetail() {
                     {shortenAddress(property.seller)}
                   </span>
                 </div>
+
                 <div className="flex justify-between py-2 border-b border-slate-100">
                   <span className="text-slate-500">Buyer</span>
                   <span className="font-mono text-slate-700">
                     {buyerExists ? shortenAddress(property.buyer) : "None yet"}
                   </span>
                 </div>
+
                 <div className="flex justify-between py-2 border-b border-slate-100">
                   <span className="text-slate-500">Escrow Amount</span>
                   <span className="font-semibold text-slate-700">
                     {ethers.utils.formatEther(property.escrowAmount)} ETH
                   </span>
                 </div>
+
                 <div className="flex justify-between py-2">
                   <span className="text-slate-500">Token ID</span>
-                  <span className="font-semibold text-slate-700">
-                    #{property.id}
-                  </span>
+                  <span className="font-semibold text-slate-700">#{property.id}</span>
                 </div>
               </div>
 
@@ -213,90 +295,97 @@ export default function PropertyDetail() {
                 </div>
               )}
             </div>
+
+            <TransactionHistory history={history} loading={historyLoading} />
+
+            {userRole === "inspector" ? (
+              <AIInspectionPanel
+                property={property}
+                report={aiReport}
+                loading={aiLoading}
+                error={aiError}
+                onRun={handleAIRun}
+              />
+            ) : null}
           </div>
 
           <div className="space-y-6">
+            {showSpecialRoleWarning ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                Your app role is <strong>{userRole}</strong>, but this smart contract still
+                requires the configured on-chain role wallet for the final action.
+                {requiredRoleWallet ? (
+                  <>
+                    <br />
+                    <span className="font-semibold">Required wallet:</span> {requiredRoleWallet}
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h3 className="text-lg font-bold text-slate-700 mb-4">
-                📊 Sale Status
-              </h3>
+              <h3 className="text-lg font-bold text-slate-700 mb-4">📊 Sale Status</h3>
               <StatusTimeline property={property} />
             </div>
 
             <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h3 className="text-lg font-bold text-slate-700 mb-4">
-                ⚡ Actions
-              </h3>
+              <h3 className="text-lg font-bold text-slate-700 mb-4">⚡ Actions</h3>
 
               <div className="space-y-3">
-                {account &&
-                  account.toLowerCase() ===
-                    ROLES.government.toLowerCase() && (
-                    <button
-                      onClick={() => handleAction("verify")}
-                      disabled={property.governmentVerified}
-                      className="w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
-                    >
-                      {property.governmentVerified
-                        ? "✅ Already Verified"
-                        : "🏛 Verify Ownership"}
-                    </button>
-                  )}
+                {userRole === "government" && (
+                  <button
+                    onClick={() => handleAction("verify")}
+                    disabled={property.governmentVerified || !canUseRoleWallet}
+                    className="w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+                  >
+                    {property.governmentVerified ? "✅ Already Verified" : "🏛 Verify Ownership"}
+                  </button>
+                )}
 
-                {account &&
-                  account.toLowerCase() ===
-                    ROLES.inspector.toLowerCase() && (
-                    <button
-                      onClick={() => handleAction("inspect")}
-                      disabled={property.inspectionPassed}
-                      className="w-full bg-orange-500 text-white py-3 rounded-lg font-semibold hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
-                    >
-                      {property.inspectionPassed
-                        ? "✅ Inspection Passed"
-                        : "🔍 Approve Inspection"}
-                    </button>
-                  )}
+                {userRole === "inspector" && (
+                  <button
+                    onClick={() => handleAction("inspect")}
+                    disabled={property.inspectionPassed || !canUseRoleWallet}
+                    className="w-full bg-orange-500 text-white py-3 rounded-lg font-semibold hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+                  >
+                    {property.inspectionPassed ? "✅ Inspection Passed" : "🔍 Approve Inspection"}
+                  </button>
+                )}
 
-                {account &&
-                  account.toLowerCase() === ROLES.lender.toLowerCase() && (
-                    <button
-                      onClick={() => handleAction("lend")}
-                      disabled={property.lenderApproved}
-                      className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
-                    >
-                      {property.lenderApproved
-                        ? "✅ Loan Approved"
-                        : "🏦 Approve Loan"}
-                    </button>
-                  )}
+                {userRole === "lender" && (
+                  <button
+                    onClick={() => handleAction("lend")}
+                    disabled={property.lenderApproved || !canUseRoleWallet}
+                    className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+                  >
+                    {property.lenderApproved ? "✅ Loan Approved" : "🏦 Approve Loan"}
+                  </button>
+                )}
 
-                {isSeller && (
+                {canActAsSeller && (
                   <button
                     onClick={() => handleAction("sell")}
-                    className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition"
+                    disabled={!canActAsSeller}
+                    className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
                   >
                     ✍️ Approve & Finalize Sale
                   </button>
                 )}
 
-                {userRole === "user" && !isSeller && (
+                {canActAsBuyer && (
                   <button
                     onClick={() => handleAction("buy")}
-                    disabled={buyerExists}
+                    disabled={buyerExists || !canActAsBuyer}
                     className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
                   >
-                    {buyerExists
-                      ? "✅ Buyer Already Funded"
-                      : `💰 Buy for ${property.price} ETH`}
+                    {buyerExists ? "✅ Buyer Already Funded" : `💰 Buy for ${property.price} ETH`}
                   </button>
                 )}
               </div>
             </div>
 
             <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h3 className="text-lg font-bold text-slate-700 mb-4">
-                🖼 NFT Details
-              </h3>
+              <h3 className="text-lg font-bold text-slate-700 mb-4">🖼 NFT Details</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Token URI</span>

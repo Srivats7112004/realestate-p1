@@ -1,11 +1,13 @@
-// frontend/pages/_app.js
 import "../styles/globals.css";
+import { AuthProvider } from "../context/AuthContext";
 import { Web3Provider } from "../context/Web3Context";
 
 export default function App({ Component, pageProps }) {
   return (
-    <Web3Provider>
-      <Component {...pageProps} />
-    </Web3Provider>
+    <AuthProvider>
+      <Web3Provider>
+        <Component {...pageProps} />
+      </Web3Provider>
+    </AuthProvider>
   );
 }
