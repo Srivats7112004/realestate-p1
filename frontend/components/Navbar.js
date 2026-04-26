@@ -5,6 +5,11 @@ import { useAuth } from "../context/AuthContext";
 import { shortenAddress } from "../utils/helpers";
 import RoleBadge from "./RoleBadge";
 
+const navItemClass = (active) =>
+  `text-sm font-medium transition-colors ${
+    active ? "text-sky-700" : "text-slate-600 hover:text-slate-900"
+  }`;
+
 export default function Navbar() {
   const router = useRouter();
   const { account, connectWallet } = useWeb3();
@@ -22,118 +27,116 @@ export default function Navbar() {
   const role = user?.role || "guest";
   const isNormalUser = role === "user" || role === "admin";
 
-  return (
-    <nav className="bg-white shadow-md px-4 md:px-8 py-4 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="text-3xl">🏠</span>
-          <span className="text-2xl font-bold text-indigo-600">BlockEstate</span>
-        </Link>
+  const links = [
+    { href: "/", label: "Marketplace", show: true },
+    { href: "/marketplace", label: "Browse", show: true },
+    { href: "/dashboard/seller", label: "Seller", show: Boolean(user && isNormalUser) },
+    { href: "/dashboard/buyer", label: "Buyer", show: Boolean(user && isNormalUser) },
+    { href: "/dashboard/inspector", label: "Inspector", show: role === "inspector" },
+    { href: "/dashboard/government", label: "Government", show: role === "government" },
+    { href: "/dashboard/lender", label: "Lender", show: role === "lender" },
+    { href: "/profile", label: "Profile", show: Boolean(user) },
+    { href: "/login", label: "Login", show: !user },
+    { href: "/register", label: "Register", show: !user },
+  ];
 
-        <div className="hidden md:flex items-center gap-5">
-          <Link
-            href="/"
-            className="text-slate-600 hover:text-indigo-600 font-medium transition"
-          >
-            Marketplace
+  return (
+    <nav className="sticky top-0 z-50 border-b border-slate-200 bg-white/88 backdrop-blur-xl supports-[backdrop-filter]:bg-white/80">
+      <div className="app-container">
+        <div className="flex flex-wrap items-center justify-between gap-4 py-4">
+          <Link href="/landing" className="flex items-center gap-3 transition-transform duration-200 hover:scale-[1.01]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-600 text-white shadow-sm">
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0h6"
+                />
+              </svg>
+            </div>
+
+            <div>
+              <div className="text-lg font-semibold tracking-tight text-slate-900">
+                BlockEstate
+              </div>
+              <div className="text-xs text-slate-500">
+                Secure onchain real-estate workflow
+              </div>
+            </div>
           </Link>
 
-          {user ? (
-            <>
-              {isNormalUser ? (
-                <>
-                  <Link
-                    href="/dashboard/seller"
-                    className="text-slate-600 hover:text-purple-600 font-medium transition"
-                  >
-                    Seller Dashboard
-                  </Link>
-                  <Link
-                    href="/dashboard/buyer"
-                    className="text-slate-600 hover:text-indigo-600 font-medium transition"
-                  >
-                    Buyer Dashboard
-                  </Link>
-                </>
-              ) : null}
-
-              {role === "inspector" ? (
+          <div className="hidden items-center gap-6 md:flex">
+            {links
+              .filter((item) => item.show)
+              .map((item) => (
                 <Link
-                  href="/dashboard/inspector"
-                  className="text-slate-600 hover:text-orange-600 font-medium transition"
+                  key={item.href}
+                  href={item.href}
+                  className={navItemClass(router.pathname === item.href)}
                 >
-                  Inspector Dashboard
+                  {item.label}
                 </Link>
-              ) : null}
+              ))}
+          </div>
 
-              {role === "government" ? (
-                <Link
-                  href="/dashboard/government"
-                  className="text-slate-600 hover:text-red-600 font-medium transition"
-                >
-                  Government Dashboard
-                </Link>
-              ) : null}
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            {user ? (
+              <div className="hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 md:flex md:items-center md:gap-3">
+                <div className="text-right">
+                  <div className="text-sm font-semibold text-slate-800">
+                    {user.name}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    Signed in
+                  </div>
+                </div>
+                <RoleBadge role={user.role} />
+              </div>
+            ) : null}
 
-              {role === "lender" ? (
-                <Link
-                  href="/dashboard/lender"
-                  className="text-slate-600 hover:text-blue-600 font-medium transition"
-                >
-                  Lender Dashboard
-                </Link>
-              ) : null}
+            <button
+              onClick={connectWallet}
+              className="rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-sky-700 hover:shadow-md"
+            >
+              {account ? shortenAddress(account) : "Connect Wallet"}
+            </button>
 
-              <Link
-                href="/profile"
-                className="text-slate-600 hover:text-indigo-600 font-medium transition"
+            {user ? (
+              <button
+                onClick={handleLogout}
+                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
-                Profile
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link
-                href="/login"
-                className="text-slate-600 hover:text-indigo-600 font-medium transition"
-              >
-                Login
-              </Link>
-              <Link
-                href="/register"
-                className="text-slate-600 hover:text-indigo-600 font-medium transition"
-              >
-                Register
-              </Link>
-            </>
-          )}
+                Logout
+              </button>
+            ) : null}
+          </div>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap justify-end">
-          {user ? (
-            <>
-              <span className="text-sm text-slate-600 font-medium">
-                Hi, {user.name}
-              </span>
-              <RoleBadge role={user.role} />
-            </>
-          ) : null}
-
-          <button
-            onClick={connectWallet}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold shadow hover:bg-indigo-700 transition"
-          >
-            {account ? shortenAddress(account) : "Connect Wallet"}
-          </button>
-
-          {user ? (
-            <button
-              onClick={handleLogout}
-              className="border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-semibold hover:bg-slate-50 transition"
-            >
-              Logout
-            </button>
-          ) : null}
+        <div className="flex gap-3 overflow-x-auto pb-4 md:hidden">
+          {links
+            .filter((item) => item.show)
+            .map((item) => {
+              const active = router.pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`whitespace-nowrap rounded-full border px-4 py-2 text-sm font-medium transition ${
+                    active
+                      ? "border-sky-200 bg-sky-50 text-sky-700"
+                      : "border-slate-200 bg-white text-slate-600"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
         </div>
       </div>
     </nav>

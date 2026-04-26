@@ -1,174 +1,146 @@
-// frontend/components/PropertyFilter.js
-import { useState } from "react";
-import { PROPERTY_TYPES } from "../utils/constants";
+import { useEffect, useMemo, useState } from "react";
 
-export default function PropertyFilter({ properties, onFilter }) {
+function getUniquePropertyTypes(properties = []) {
+  const types = new Set();
+
+  properties.forEach((property) => {
+    if (property?.propertyType) {
+      types.add(property.propertyType);
+    }
+  });
+
+  return ["All Types", ...Array.from(types)];
+}
+
+function parsePrice(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+}
+
+export default function PropertyFilter({ properties = [], onFilter }) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [minPrice, setMinPrice] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
-  const [propertyType, setPropertyType] = useState("");
-  const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [sortBy, setSortBy] = useState("newest");
+  const [selectedType, setSelectedType] = useState("All Types");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("default");
 
-  const applyFilters = () => {
-    let filtered = [...properties];
+  const propertyTypes = useMemo(() => getUniquePropertyTypes(properties), [properties]);
 
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (p) =>
-          (p.name && p.name.toLowerCase().includes(term)) ||
-          (p.location && p.location.toLowerCase().includes(term)) ||
-          (p.seller && p.seller.toLowerCase().includes(term)) ||
-          `property #${p.id}`.includes(term)
+  const filteredProperties = useMemo(() => {
+    let result = [...properties];
+
+    // Search
+    if (searchTerm.trim()) {
+      const query = searchTerm.toLowerCase();
+
+      result = result.filter((property) => {
+        const searchableText = [
+          property?.name,
+          property?.location,
+          property?.description,
+          property?.propertyType,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        return searchableText.includes(query);
+      });
+    }
+
+    // Property type
+    if (selectedType !== "All Types") {
+      result = result.filter(
+        (property) => property?.propertyType === selectedType
       );
     }
 
-    if (minPrice) {
-      filtered = filtered.filter(
-        (p) => parseFloat(p.price) >= parseFloat(minPrice)
-      );
-    }
-    if (maxPrice) {
-      filtered = filtered.filter(
-        (p) => parseFloat(p.price) <= parseFloat(maxPrice)
-      );
-    }
-
-    if (propertyType) {
-      filtered = filtered.filter((p) => p.propertyType === propertyType);
+    // Status
+    if (statusFilter === "verified") {
+      result = result.filter((property) => property?.governmentVerified);
+    } else if (statusFilter === "unverified") {
+      result = result.filter((property) => !property?.governmentVerified);
+    } else if (statusFilter === "sold") {
+      result = result.filter((property) => property?.sold);
+    } else if (statusFilter === "available") {
+      result = result.filter((property) => !property?.sold);
     }
 
-    if (verifiedOnly) {
-      filtered = filtered.filter((p) => p.governmentVerified);
+    // Sorting
+    if (sortBy === "price-low-high") {
+      result.sort((a, b) => parsePrice(a?.price) - parsePrice(b?.price));
+    } else if (sortBy === "price-high-low") {
+      result.sort((a, b) => parsePrice(b?.price) - parsePrice(a?.price));
+    } else if (sortBy === "name-az") {
+      result.sort((a, b) => (a?.name || "").localeCompare(b?.name || ""));
+    } else if (sortBy === "name-za") {
+      result.sort((a, b) => (b?.name || "").localeCompare(a?.name || ""));
     }
 
-    switch (sortBy) {
-      case "price-low":
-        filtered.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
-        break;
-      case "price-high":
-        filtered.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
-        break;
-      case "newest":
-        filtered.sort((a, b) => b.id - a.id);
-        break;
-      case "oldest":
-        filtered.sort((a, b) => a.id - b.id);
-        break;
-      default:
-        break;
-    }
+    return result;
+  }, [properties, searchTerm, selectedType, statusFilter, sortBy]);
 
-    onFilter(filtered);
-  };
+  useEffect(() => {
+    onFilter(filteredProperties);
+  }, [filteredProperties, onFilter]);
 
-  const resetFilters = () => {
+  const handleReset = () => {
     setSearchTerm("");
-    setMinPrice("");
-    setMaxPrice("");
-    setPropertyType("");
-    setVerifiedOnly(false);
-    setSortBy("newest");
-    onFilter(properties);
+    setSelectedType("All Types");
+    setStatusFilter("all");
+    setSortBy("default");
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border border-slate-100">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-bold text-slate-700">🔍 Search & Filter</h3>
-        <button
-          onClick={resetFilters}
-          className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
-        >
-          Reset All
-        </button>
+    <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+      <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="page-kicker mb-3">
+            <span className="page-dot" />
+            Search and refine
+          </div>
+          <h3 className="text-xl font-bold tracking-tight text-slate-900">
+            Filter marketplace listings
+          </h3>
+          <p className="mt-2 max-w-2xl text-sm text-slate-500">
+            Search by property name or location, narrow listings by type and status,
+            and sort results for a cleaner marketplace browsing experience.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+            Filtered Results
+          </div>
+          <div className="text-2xl font-bold text-slate-900">
+            {filteredProperties.length}
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">
+          <label className="mb-2 block text-sm font-semibold text-slate-700">
             Search
           </label>
           <input
             type="text"
-            placeholder="Name, location, or address..."
+            placeholder="Search by name, type, or location"
             value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setTimeout(applyFilters, 100);
-            }}
-            className="w-full p-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">
-            Min Price (ETH)
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            placeholder="0"
-            value={minPrice}
-            onChange={(e) => {
-              setMinPrice(e.target.value);
-              setTimeout(applyFilters, 100);
-            }}
-            className="w-full p-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">
-            Max Price (ETH)
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            placeholder="100"
-            value={maxPrice}
-            onChange={(e) => {
-              setMaxPrice(e.target.value);
-              setTimeout(applyFilters, 100);
-            }}
-            className="w-full p-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">
-            Sort By
+          <label className="mb-2 block text-sm font-semibold text-slate-700">
+            Property Type
           </label>
           <select
-            value={sortBy}
-            onChange={(e) => {
-              setSortBy(e.target.value);
-              setTimeout(applyFilters, 100);
-            }}
-            className="w-full p-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none bg-white"
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value)}
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
           >
-            <option value="newest">Newest First</option>
-            <option value="oldest">Oldest First</option>
-            <option value="price-low">Price: Low to High</option>
-            <option value="price-high">Price: High to Low</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-4 mt-4">
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-slate-500">Type:</label>
-          <select
-            value={propertyType}
-            onChange={(e) => {
-              setPropertyType(e.target.value);
-              setTimeout(applyFilters, 100);
-            }}
-            className="p-2 border border-slate-200 rounded-lg text-sm bg-white"
-          >
-            <option value="">All Types</option>
-            {PROPERTY_TYPES.map((type) => (
+            {propertyTypes.map((type) => (
               <option key={type} value={type}>
                 {type}
               </option>
@@ -176,24 +148,75 @@ export default function PropertyFilter({ properties, onFilter }) {
           </select>
         </div>
 
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={verifiedOnly}
-            onChange={(e) => {
-              setVerifiedOnly(e.target.checked);
-              setTimeout(applyFilters, 100);
-            }}
-            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-          />
-          <span className="text-sm text-slate-600">Verified Only</span>
-        </label>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">
+            Status
+          </label>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+          >
+            <option value="all">All Statuses</option>
+            <option value="verified">Verified</option>
+            <option value="unverified">Unverified</option>
+            <option value="available">Available</option>
+            <option value="sold">Sold</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">
+            Sort By
+          </label>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+          >
+            <option value="default">Default Order</option>
+            <option value="price-low-high">Price: Low to High</option>
+            <option value="price-high-low">Price: High to Low</option>
+            <option value="name-az">Name: A to Z</option>
+            <option value="name-za">Name: Z to A</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-col gap-4 border-t border-slate-200 pt-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap gap-2">
+          {[
+            {
+              label: "Verified",
+              value: properties.filter((p) => p?.governmentVerified).length,
+              tone: "bg-emerald-50 text-emerald-700 border-emerald-200",
+            },
+            {
+              label: "Pending",
+              value: properties.filter((p) => !p?.governmentVerified).length,
+              tone: "bg-amber-50 text-amber-700 border-amber-200",
+            },
+            {
+              label: "Sold",
+              value: properties.filter((p) => p?.sold).length,
+              tone: "bg-violet-50 text-violet-700 border-violet-200",
+            },
+          ].map((item) => (
+            <span
+              key={item.label}
+              className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${item.tone}`}
+            >
+              {item.label}: {item.value}
+            </span>
+          ))}
+        </div>
 
         <button
-          onClick={applyFilters}
-          className="ml-auto bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition"
+          type="button"
+          onClick={handleReset}
+          className="secondary-btn px-5 py-2.5 text-sm"
         >
-          Apply Filters
+          Reset Filters
         </button>
       </div>
     </div>

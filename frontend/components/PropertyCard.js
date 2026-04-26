@@ -6,6 +6,24 @@ import {
 } from "../utils/helpers";
 import { useWeb3 } from "../context/Web3Context";
 
+function StatusChip({ children, tone = "slate" }) {
+  const tones = {
+    sky: "bg-sky-50 text-sky-700 border-sky-100",
+    green: "bg-emerald-50 text-emerald-700 border-emerald-100",
+    amber: "bg-amber-50 text-amber-700 border-amber-100",
+    red: "bg-red-50 text-red-700 border-red-100",
+    slate: "bg-white/90 text-slate-700 border-slate-200",
+  };
+
+  return (
+    <span
+      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm ${tones[tone]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
 export default function PropertyCard({ property, onAction }) {
   const {
     account,
@@ -29,21 +47,10 @@ export default function PropertyCard({ property, onAction }) {
 
   const isNormalUser = userRole === "user" || userRole === "admin";
   const canShowSellerAction = isNormalUser && isSeller;
-  const canShowBuyerAction = isNormalUser && !isSeller && !property.sold && !buyerExists;
+  const canShowBuyerAction =
+    isNormalUser && !isSeller && !property.sold && !buyerExists;
 
   const completion = getCompletionPercentage(property);
-
-  const getStatusColor = () => {
-    if (property.sold) return "border-green-400";
-    if (completion >= 50) return "border-yellow-400";
-    return "border-slate-200";
-  };
-
-  const getStatusText = () => {
-    if (property.sold) return "Sold";
-    if (buyerExists) return "Sale in progress";
-    return "Available";
-  };
 
   const sellerCanFinalize =
     buyerExists &&
@@ -52,13 +59,37 @@ export default function PropertyCard({ property, onAction }) {
     property.lenderApproved &&
     !property.sold;
 
+  const statusText = property.sold
+    ? "Sold"
+    : buyerExists
+    ? "Sale in progress"
+    : "Available";
+
+  const nextStepText = property.sold
+    ? "Ownership transferred"
+    : !buyerExists
+    ? "Awaiting buyer deposit"
+    : !property.governmentVerified
+    ? "Government verification pending"
+    : !property.inspectionPassed
+    ? "Inspection pending"
+    : !property.lenderApproved
+    ? "Lender approval pending"
+    : "Ready for seller finalize";
+
+  const cardBorderClass = property.sold
+    ? "border-emerald-200"
+    : completion >= 50
+    ? "border-sky-200"
+    : "border-slate-200";
+
   const renderAction = () => {
     if (userRole === "government") {
       return (
         <button
           onClick={() => onAction?.("verify", property)}
           disabled={property.governmentVerified || !canUseRoleWallet}
-          className="flex-1 bg-red-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+          className="primary-btn flex-1 px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
           {property.governmentVerified ? "Verified" : "Verify"}
         </button>
@@ -70,9 +101,9 @@ export default function PropertyCard({ property, onAction }) {
         <button
           onClick={() => onAction?.("inspect", property)}
           disabled={property.inspectionPassed || !canUseRoleWallet}
-          className="flex-1 bg-orange-500 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+          className="primary-btn flex-1 px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {property.inspectionPassed ? "Passed" : "Review / Inspect"}
+          {property.inspectionPassed ? "Passed" : "Inspect"}
         </button>
       );
     }
@@ -82,7 +113,7 @@ export default function PropertyCard({ property, onAction }) {
         <button
           onClick={() => onAction?.("lend", property)}
           disabled={property.lenderApproved || !canUseRoleWallet || !buyerExists}
-          className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+          className="primary-btn flex-1 px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
           {property.lenderApproved ? "Approved" : "Approve Loan"}
         </button>
@@ -94,9 +125,9 @@ export default function PropertyCard({ property, onAction }) {
         <button
           onClick={() => onAction?.("sell", property)}
           disabled={!canUseConnectedWallet || !sellerCanFinalize}
-          className="flex-1 bg-purple-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+          className="primary-btn flex-1 px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {property.sold ? "Sold" : "Finalize"}
+          {property.sold ? "Sold" : "Finalize Sale"}
         </button>
       );
     }
@@ -106,180 +137,163 @@ export default function PropertyCard({ property, onAction }) {
         <button
           onClick={() => onAction?.("buy", property)}
           disabled={!canUseConnectedWallet}
-          className="flex-1 bg-indigo-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+          className="primary-btn flex-1 px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Buy
+          Buy Property
         </button>
       );
     }
 
     return (
-      <span className="flex-1 text-center bg-slate-100 text-slate-500 py-2.5 rounded-lg font-semibold text-sm">
+      <div className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-sm font-semibold text-slate-500">
         No action
-      </span>
+      </div>
     );
   };
 
   return (
     <div
-      className={`property-card bg-white rounded-2xl shadow-lg overflow-hidden border-2 ${getStatusColor()} animate-fadeIn`}
+      className={`group overflow-hidden rounded-[1.5rem] border bg-white shadow-[0_14px_36px_rgba(15,23,42,0.06)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_20px_48px_rgba(14,165,233,0.12)] ${cardBorderClass}`}
     >
       <div className="relative">
         <img
           src={property.image}
           alt={property.name || `Property ${property.id}`}
-          className="w-full h-56 object-cover"
+          className="h-60 w-full object-cover transition duration-500 group-hover:scale-[1.03]"
           onError={(e) => {
-            e.target.src = "https://via.placeholder.com/400x250?text=Property+Image";
+            e.target.src =
+              "https://via.placeholder.com/800x480?text=Property+Image";
           }}
         />
 
-        <div className="absolute top-3 left-3 flex gap-2 flex-wrap">
-          {property.sold ? (
-            <span className="bg-green-600 text-white text-xs px-2 py-1 rounded-full font-semibold">
-              🎉 Sold
-            </span>
-          ) : null}
+        <div className="absolute inset-x-0 top-0 flex items-start justify-between p-4">
+          <div className="flex flex-wrap gap-2">
+            {property.sold ? <StatusChip tone="green">Sold</StatusChip> : null}
+            {property.governmentVerified ? (
+              <StatusChip tone="sky">Verified</StatusChip>
+            ) : null}
+            {property.propertyType ? (
+              <StatusChip tone="slate">{property.propertyType}</StatusChip>
+            ) : null}
+          </div>
 
-          {property.governmentVerified ? (
-            <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full font-semibold">
-              ✅ Verified
-            </span>
-          ) : null}
-
-          {property.propertyType ? (
-            <span className="bg-indigo-500 text-white text-xs px-2 py-1 rounded-full font-semibold">
-              {property.propertyType}
-            </span>
-          ) : null}
+          <div className="rounded-2xl border border-white/60 bg-white/90 px-3 py-2 text-right shadow-sm backdrop-blur">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+              Price
+            </div>
+            <div className="text-base font-bold text-sky-700">
+              {property.price} ETH
+            </div>
+          </div>
         </div>
 
-        <div className="absolute bottom-3 right-3">
-          <span className="bg-white/90 backdrop-blur text-indigo-700 font-bold px-3 py-1.5 rounded-lg shadow text-sm">
-            {property.price} ETH
-          </span>
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/55 via-slate-900/10 to-transparent px-4 pb-4 pt-10">
+          <div className="text-sm font-medium text-white/90">
+            {property.location || "Location unavailable"}
+          </div>
         </div>
       </div>
 
       <div className="p-5">
-        <div className="flex items-start justify-between mb-2 gap-3">
+        <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-lg font-bold text-slate-800">
+            <h3 className="text-xl font-bold tracking-tight text-slate-900">
               {property.name || `Property #${property.id}`}
             </h3>
-
-            {property.location ? (
-              <p className="text-sm text-slate-500 flex items-center gap-1">
-                📍 {property.location}
-              </p>
-            ) : null}
+            <p className="mt-1 text-sm text-slate-500">
+              {statusText} · Token #{property.id}
+            </p>
           </div>
 
-          <span className="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded-full">
-            #{property.id}
-          </span>
-        </div>
-
-        {property.area ? (
-          <p className="text-xs text-slate-500 mb-2">📐 {property.area} sq ft</p>
-        ) : null}
-
-        <div className="space-y-1 mb-3">
-          <p className="text-xs text-slate-400">
-            Seller: {shortenAddress(property.seller)}
-          </p>
-
-          {buyerExists ? (
-            <p className="text-xs text-slate-400">
-              Buyer: {shortenAddress(property.buyer)}
-            </p>
-          ) : (
-            <p className="text-xs text-slate-400">Buyer: Not yet assigned</p>
-          )}
-
-          <p className="text-xs text-slate-400">
-            Current Owner: {shortenAddress(property.currentOwner)}
-          </p>
-
-          <p className="text-xs font-semibold text-slate-600">
-            Status: {getStatusText()}
-          </p>
-
-          {isBuyer && property.sold ? (
-            <p className="text-xs font-semibold text-green-600">
-              This property is owned by you
-            </p>
+          {property.area ? (
+            <div className="rounded-2xl bg-slate-50 px-3 py-2 text-right">
+              <div className="text-[11px] uppercase tracking-wide text-slate-400">
+                Area
+              </div>
+              <div className="text-sm font-semibold text-slate-700">
+                {property.area} sq ft
+              </div>
+            </div>
           ) : null}
         </div>
 
-        <div className="mb-3">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-slate-400">Sale Progress</span>
-            <span className="text-xs font-bold text-indigo-600">{completion}%</span>
+        <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Workflow Progress
+            </span>
+            <span className="text-sm font-bold text-sky-700">
+              {completion}%
+            </span>
           </div>
 
-          <div className="w-full bg-slate-100 rounded-full h-1.5">
+          <div className="mb-3 h-2 overflow-hidden rounded-full bg-slate-200">
             <div
-              className="bg-indigo-500 h-1.5 rounded-full progress-bar"
+              className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-400 transition-all duration-500"
               style={{ width: `${completion}%` }}
-            ></div>
+            />
+          </div>
+
+          <div className="text-sm text-slate-600">
+            <span className="font-semibold text-slate-800">Next step:</span>{" "}
+            {nextStepText}
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-1 mb-4">
-          <span
-            className={`text-xs px-2 py-0.5 rounded-full ${
-              property.governmentVerified
-                ? "bg-green-100 text-green-700"
-                : "bg-slate-100 text-slate-400"
-            }`}
-          >
-            🏛 Gov
-          </span>
+        <div className="mb-4 grid grid-cols-2 gap-3 text-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-3">
+            <div className="mb-1 text-xs uppercase tracking-wide text-slate-400">
+              Seller
+            </div>
+            <div className="font-medium text-slate-700">
+              {shortenAddress(property.seller)}
+            </div>
+          </div>
 
-          <span
-            className={`text-xs px-2 py-0.5 rounded-full ${
-              property.inspectionPassed
-                ? "bg-green-100 text-green-700"
-                : "bg-slate-100 text-slate-400"
-            }`}
-          >
-            🔍 Inspect
-          </span>
+          <div className="rounded-2xl border border-slate-200 bg-white p-3">
+            <div className="mb-1 text-xs uppercase tracking-wide text-slate-400">
+              Buyer
+            </div>
+            <div className="font-medium text-slate-700">
+              {buyerExists ? shortenAddress(property.buyer) : "Not assigned"}
+            </div>
+          </div>
+        </div>
 
-          <span
-            className={`text-xs px-2 py-0.5 rounded-full ${
-              buyerExists ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400"
-            }`}
-          >
-            💰 Funded
-          </span>
-
-          <span
-            className={`text-xs px-2 py-0.5 rounded-full ${
-              property.lenderApproved
-                ? "bg-green-100 text-green-700"
-                : "bg-slate-100 text-slate-400"
-            }`}
-          >
-            🏦 Lender
-          </span>
+        <div className="mb-4 flex flex-wrap gap-2">
+          <StatusChip tone={buyerExists ? "green" : "slate"}>
+            Buyer funded
+          </StatusChip>
+          <StatusChip tone={property.governmentVerified ? "green" : "slate"}>
+            Government
+          </StatusChip>
+          <StatusChip tone={property.inspectionPassed ? "green" : "slate"}>
+            Inspection
+          </StatusChip>
+          <StatusChip tone={property.lenderApproved ? "green" : "slate"}>
+            Lender
+          </StatusChip>
         </div>
 
         {canShowSellerAction && !sellerCanFinalize && !property.sold ? (
-          <div className="mb-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
-            Seller can finalize only after buyer funding, inspection, lender approval, and government verification.
+          <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Finalize becomes available after buyer funding, inspection, lender approval, and government verification.
           </div>
         ) : null}
 
-        <div className="flex gap-2">
+        {isBuyer && property.sold ? (
+          <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            This property is now owned by your connected wallet.
+          </div>
+        ) : null}
+
+        <div className="flex gap-3">
           <Link
             href={`/property/property-detail?id=${property.id}`}
-            className="flex-1 text-center bg-slate-100 text-slate-700 py-2.5 rounded-lg font-semibold text-sm hover:bg-slate-200 transition"
+            className="secondary-btn flex-1 px-4 py-3 text-center text-sm"
           >
             View Details
           </Link>
-
           {renderAction()}
         </div>
       </div>

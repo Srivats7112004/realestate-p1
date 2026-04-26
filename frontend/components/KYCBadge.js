@@ -1,56 +1,95 @@
-// frontend/components/KYCBadge.js
+import { useMemo, useState } from "react";
 import { useWeb3 } from "../context/Web3Context";
 
 const statusConfig = {
   none: {
     label: "Not Verified",
-    bgColor: "bg-gray-100",
-    textColor: "text-gray-600",
-    icon: "⚪",
+    tone: "border-slate-200 bg-slate-50 text-slate-600",
+    dot: "bg-slate-400",
+    buttonTone:
+      "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100",
   },
   pending: {
     label: "KYC Pending",
-    bgColor: "bg-yellow-100",
-    textColor: "text-yellow-700",
-    icon: "⏳",
+    tone: "border-amber-200 bg-amber-50 text-amber-700",
+    dot: "bg-amber-500",
+    buttonTone:
+      "border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed",
   },
   verified: {
     label: "KYC Verified",
-    bgColor: "bg-green-100",
-    textColor: "text-green-700",
-    icon: "✅",
+    tone: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    dot: "bg-emerald-500",
+    buttonTone:
+      "border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed",
   },
   rejected: {
     label: "KYC Rejected",
-    bgColor: "bg-red-100",
-    textColor: "text-red-700",
-    icon: "❌",
+    tone: "border-red-200 bg-red-50 text-red-700",
+    dot: "bg-red-500",
+    buttonTone:
+      "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100",
   },
 };
 
 export default function KYCBadge({ address, showRequestButton = false }) {
   const { getKYCStatus, requestKYC } = useWeb3();
+  const [submitting, setSubmitting] = useState(false);
 
   const status = getKYCStatus(address);
   const config = statusConfig[status] || statusConfig.none;
 
-  return (
-    <div className="flex items-center gap-2">
-      <span
-        className={`${config.bgColor} ${config.textColor} px-3 py-1 rounded-full text-sm font-semibold inline-flex items-center gap-1`}
-      >
-        <span>{config.icon}</span>
-        <span>{config.label}</span>
-      </span>
+  const helperText = useMemo(() => {
+    if (status === "verified") {
+      return "This wallet has completed KYC review.";
+    }
+    if (status === "pending") {
+      return "KYC request has been submitted and is awaiting review.";
+    }
+    if (status === "rejected") {
+      return "Previous KYC request was rejected. You can submit again.";
+    }
+    return "This wallet has not submitted a KYC request yet.";
+  }, [status]);
 
-      {showRequestButton && status === "none" && (
-        <button
-          onClick={() => requestKYC(address)}
-          className="text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full hover:bg-indigo-200 transition"
+  const canRequest = showRequestButton && (status === "none" || status === "rejected");
+
+  const handleRequest = async () => {
+    if (!address || !canRequest) return;
+
+    try {
+      setSubmitting(true);
+      await requestKYC(address);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="inline-flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${config.tone}`}
         >
-          Request KYC
-        </button>
-      )}
+          <span className={`h-2.5 w-2.5 rounded-full ${config.dot}`} />
+          <span>{config.label}</span>
+        </span>
+
+        {canRequest ? (
+          <button
+            type="button"
+            onClick={handleRequest}
+            disabled={submitting}
+            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${config.buttonTone} ${
+              submitting ? "opacity-60" : ""
+            }`}
+          >
+            {submitting ? "Submitting..." : "Request KYC"}
+          </button>
+        ) : null}
+      </div>
+
+      <p className="text-xs text-slate-500">{helperText}</p>
     </div>
   );
 }

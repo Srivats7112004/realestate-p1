@@ -319,13 +319,19 @@ contract Escrow {
         require(item.isListed, "Property not listed");
         require(item.seller != address(0), "Listing does not exist");
 
+        bool updated = false;
+
         if (lenders[msg.sender]) {
             item.lenderApproved = true;
-        } else if (msg.sender == item.seller) {
-            item.sellerApproved = true;
-        } else {
-            revert("Not authorized to approve sale");
+            updated = true;
         }
+
+        if (msg.sender == item.seller) {
+            item.sellerApproved = true;
+            updated = true;
+        }
+
+        require(updated, "Not authorized to approve sale");
 
         emit SaleApprovalUpdated(
             _nftID,

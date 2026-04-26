@@ -1,5 +1,5 @@
 // frontend/pages/index.js
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
 import { useWeb3 } from "../context/Web3Context";
 import Navbar from "../components/Navbar";
@@ -22,7 +22,6 @@ export default function Home() {
   const [filteredProperties, setFilteredProperties] = useState([]);
   const [showListForm, setShowListForm] = useState(false);
 
-  // Redirect to landing if not connected
   useEffect(() => {
     if (!loading && !account) {
       router.push("/landing");
@@ -33,9 +32,15 @@ export default function Home() {
     setFilteredProperties(properties);
   }, [properties]);
 
-  // ... rest of your existing code stays the same
+  const stats = useMemo(() => {
+    const total = properties.length;
+    const verified = properties.filter((p) => p.governmentVerified).length;
+    const inEscrow = properties.filter((p) => p.buyerDeposited).length;
+    const sold = properties.filter((p) => p.sold).length;
 
-  // Action handlers
+    return { total, verified, inEscrow, sold };
+  }, [properties]);
+
   const handleAction = async (action, property) => {
     try {
       const signer = provider.getSigner();
@@ -49,6 +54,7 @@ export default function Home() {
           alert("Payment deposited successfully!");
           break;
         }
+
         case "inspect": {
           const tx = await escrow
             .connect(signer)
@@ -57,35 +63,32 @@ export default function Home() {
           alert("Inspection approved!");
           break;
         }
+
         case "lend": {
-          const tx = await escrow
-            .connect(signer)
-            .approveSale(property.id);
+          const tx = await escrow.connect(signer).approveSale(property.id);
           await tx.wait();
           alert("Lender approved!");
           break;
         }
+
         case "verify": {
-          const tx = await escrow
-            .connect(signer)
-            .verifyProperty(property.id);
+          const tx = await escrow.connect(signer).verifyProperty(property.id);
           await tx.wait();
           alert("Government verification complete!");
           break;
         }
+
         case "sell": {
-          let tx = await escrow
-            .connect(signer)
-            .approveSale(property.id);
+          let tx = await escrow.connect(signer).approveSale(property.id);
           await tx.wait();
 
-          tx = await escrow
-            .connect(signer)
-            .finalizeSale(property.id);
+          tx = await escrow.connect(signer).finalizeSale(property.id);
           await tx.wait();
+
           alert("Sale completed successfully!");
           break;
         }
+
         default:
           break;
       }
@@ -98,91 +101,239 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
+    <div className="app-shell">
       <Navbar />
 
-      {/* Hero Section */}
-      <div className="text-center py-12 px-4">
-        <h2 className="text-5xl font-bold text-slate-800 mb-3">
-          Decentralized Real Estate
-        </h2>
-        <p className="text-lg text-slate-500 max-w-2xl mx-auto">
-          Buy, sell, verify, and transfer property ownership securely on the
-          blockchain. No intermediaries. Full transparency.
-        </p>
+      <main className="app-container pb-16">
+        {/* Hero / Intro */}
+        <section className="pt-8 md:pt-10">
+          <div className="hero-panel overflow-hidden px-6 py-8 md:px-10 md:py-10">
+            <div className="grid items-center gap-10 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="animate-fadeIn">
+                <div className="page-kicker mb-5">
+                  <span className="page-dot" />
+                  Live blockchain marketplace dashboard
+                </div>
 
-        {/* Stats */}
-        <div className="flex justify-center gap-8 mt-8">
-          <div className="bg-white rounded-xl shadow px-6 py-4">
-            <div className="text-3xl font-bold text-indigo-600">
-              {properties.length}
-            </div>
-            <div className="text-sm text-slate-500">Properties Listed</div>
-          </div>
-          <div className="bg-white rounded-xl shadow px-6 py-4">
-            <div className="text-3xl font-bold text-green-600">
-              {properties.filter((p) => p.governmentVerified).length}
-            </div>
-            <div className="text-sm text-slate-500">Verified</div>
-          </div>
-          <div className="bg-white rounded-xl shadow px-6 py-4">
-            <div className="text-3xl font-bold text-purple-600">
-              {properties.filter((p) => p.buyerDeposited).length}
-            </div>
-            <div className="text-sm text-slate-500">In Escrow</div>
-          </div>
-        </div>
-      </div>
+                <h1 className="mb-4 max-w-3xl text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
+                  Manage listings, approvals, and escrow progress from one clean workspace
+                </h1>
 
-      <div className="max-w-7xl mx-auto px-4 md:px-6 pb-16">
-        {/* List Property Toggle */}
-        {account && (userRole === "user") && (
-          <div className="mb-8">
-            <button
-              onClick={() => setShowListForm(!showListForm)}
-              className="bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold shadow hover:bg-purple-700 transition flex items-center gap-2"
-            >
-              {showListForm ? "✕ Close Form" : "➕ List New Property"}
-            </button>
+                <p className="section-subtext max-w-2xl text-base md:text-lg">
+                  Browse tokenized properties, monitor real-time sale progress,
+                  and complete escrow-driven transactions with full workflow visibility.
+                </p>
 
-            {showListForm && (
-              <div className="mt-6 max-w-3xl">
-                <ListPropertyForm
-                  onSuccess={() => {
-                    setShowListForm(false);
-                    loadBlockchainData();
-                  }}
-                />
+                <div className="mt-7 flex flex-wrap gap-3">
+                  {account && userRole === "user" && (
+                    <button
+                      onClick={() => setShowListForm(!showListForm)}
+                      className="primary-btn px-6 py-3 text-sm md:text-base"
+                    >
+                      {showListForm ? "Close listing form" : "List New Property"}
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => router.push("/marketplace")}
+                    className="secondary-btn px-6 py-3 text-sm md:text-base"
+                  >
+                    Browse Marketplace
+                  </button>
+                </div>
               </div>
-            )}
+
+              <div className="animate-fadeIn">
+                <div className="surface-card-strong p-5 md:p-6">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-800">
+                        Transaction Snapshot
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Current marketplace activity
+                      </div>
+                    </div>
+
+                    <div className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                      Live
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {[
+                      {
+                        label: "Properties listed",
+                        value: stats.total,
+                        color: "text-slate-900",
+                      },
+                      {
+                        label: "Verified assets",
+                        value: stats.verified,
+                        color: "text-emerald-600",
+                      },
+                      {
+                        label: "Escrow active",
+                        value: stats.inEscrow,
+                        color: "text-sky-600",
+                      },
+                      {
+                        label: "Completed transfers",
+                        value: stats.sold,
+                        color: "text-violet-600",
+                      },
+                    ].map((item) => (
+                      <div
+                        key={item.label}
+                        className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                      >
+                        <div className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                          {item.label}
+                        </div>
+                        <div className={`text-2xl font-bold ${item.color}`}>
+                          {item.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+        </section>
+
+        {/* List form */}
+        {account && userRole === "user" && showListForm && (
+          <section className="pt-8 animate-fadeIn">
+            <div className="surface-card-strong p-6 md:p-8">
+              <div className="mb-6">
+                <div className="page-kicker mb-3">
+                  <span className="page-dot" />
+                  Seller action
+                </div>
+                <h2 className="section-heading">Create a new property listing</h2>
+                <p className="section-subtext mt-2 max-w-2xl">
+                  Upload property information, connect the asset to the escrow workflow,
+                  and publish it to the marketplace with a cleaner, investor-ready presentation.
+                </p>
+              </div>
+
+              <ListPropertyForm
+                onSuccess={() => {
+                  setShowListForm(false);
+                  loadBlockchainData();
+                }}
+              />
+            </div>
+          </section>
         )}
 
-        {/* Search & Filter */}
-        {properties.length > 0 && (
-          <PropertyFilter
-            properties={properties}
-            onFilter={setFilteredProperties}
-          />
-        )}
-
-        {/* Loading State */}
-        {loading ? (
-          <div className="text-center py-20">
-            <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-slate-500 text-lg">
-              Loading properties from blockchain...
-            </p>
-          </div>
-        ) : filteredProperties.length > 0 ? (
-          <>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-slate-700">
-                🏘 Available Properties ({filteredProperties.length})
-              </h3>
+        {/* Stats row */}
+        <section className="pt-8">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="soft-stat p-5">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Total Listings
+              </div>
+              <div className="text-3xl font-bold tracking-tight text-slate-900">
+                {stats.total}
+              </div>
+              <p className="mt-2 text-sm text-slate-500">
+                All properties currently available in the ecosystem.
+              </p>
             </div>
 
-            <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            <div className="soft-stat p-5">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Government Verified
+              </div>
+              <div className="text-3xl font-bold tracking-tight text-emerald-600">
+                {stats.verified}
+              </div>
+              <p className="mt-2 text-sm text-slate-500">
+                Assets that completed the verification milestone.
+              </p>
+            </div>
+
+            <div className="soft-stat p-5">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Escrow Active
+              </div>
+              <div className="text-3xl font-bold tracking-tight text-sky-600">
+                {stats.inEscrow}
+              </div>
+              <p className="mt-2 text-sm text-slate-500">
+                Transactions with buyer funds already deposited.
+              </p>
+            </div>
+
+            <div className="soft-stat p-5">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Completed Sales
+              </div>
+              <div className="text-3xl font-bold tracking-tight text-violet-600">
+                {stats.sold}
+              </div>
+              <p className="mt-2 text-sm text-slate-500">
+                Fully finalized property transfers on-chain.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Filter / catalog header */}
+        <section className="pt-10">
+          <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="page-kicker mb-3">
+                <span className="page-dot" />
+                Property catalog
+              </div>
+              <h2 className="section-heading">
+                Discover and act on live marketplace listings
+              </h2>
+              <p className="section-subtext mt-2 max-w-2xl">
+                Review the latest properties, check workflow readiness, and move
+                transactions forward with role-based actions.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Visible results
+              </div>
+              <div className="text-2xl font-bold text-slate-900">
+                {filteredProperties.length}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid-divider mb-6" />
+
+          {properties.length > 0 ? (
+            <div className="surface-card p-4 md:p-5 mb-6">
+              <PropertyFilter
+                properties={properties}
+                onFilter={setFilteredProperties}
+              />
+            </div>
+          ) : null}
+        </section>
+
+        {/* Listing grid */}
+        <section>
+          {loading ? (
+            <div className="surface-card-strong py-20 text-center">
+              <div className="mx-auto mb-4 h-12 w-12 rounded-full border-4 border-sky-500 border-t-transparent animate-spin" />
+              <h3 className="text-xl font-semibold text-slate-800">
+                Loading marketplace data
+              </h3>
+              <p className="mt-2 text-slate-500">
+                Syncing listings and workflow states from the blockchain.
+              </p>
+            </div>
+          ) : filteredProperties.length > 0 ? (
+            <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
               {filteredProperties.map((property) => (
                 <PropertyCard
                   key={property.id}
@@ -191,31 +342,65 @@ export default function Home() {
                 />
               ))}
             </div>
-          </>
-        ) : (
-          <div className="text-center py-20">
-            <div className="text-6xl mb-4">🏗</div>
-            <h3 className="text-2xl font-bold text-slate-600 mb-2">
-              No Properties Found
-            </h3>
-            <p className="text-slate-400">
-              {properties.length === 0
-                ? "Be the first to list a property on the blockchain!"
-                : "Try adjusting your filters."}
-            </p>
-          </div>
-        )}
-      </div>
+          ) : (
+            <div className="surface-card-strong px-6 py-20 text-center">
+              <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-sky-50 text-4xl">
+                🏘️
+              </div>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-slate-200 py-8 mt-8">
-        <div className="max-w-7xl mx-auto px-6 text-center">
-          <p className="text-slate-500 text-sm">
-            🏠 BlockEstate — Blockchain-Based Real Estate Management System
-          </p>
-          <p className="text-slate-400 text-xs mt-1">
-            Built with Solidity • Hardhat • Next.js • Ethers.js • IPFS
-          </p>
+              <h3 className="text-2xl font-bold tracking-tight text-slate-900">
+                No properties found
+              </h3>
+
+              <p className="mx-auto mt-3 max-w-xl text-slate-500">
+                {properties.length === 0
+                  ? "No assets have been listed yet. Start by creating the first property listing and publish it to the marketplace."
+                  : "No listings match the current filter settings. Adjust your filters to explore more properties."}
+              </p>
+
+              {account && userRole === "user" && properties.length === 0 && (
+                <button
+                  onClick={() => setShowListForm(true)}
+                  className="primary-btn mt-6 px-6 py-3 text-sm"
+                >
+                  Create first listing
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+      </main>
+
+      <footer className="border-t border-slate-200 bg-white/85 backdrop-blur-sm">
+        <div className="app-container py-8">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">
+                BlockEstate
+              </p>
+              <p className="text-sm text-slate-500">
+                Blockchain-powered real estate workflow with escrow, approvals, and NFT ownership.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <span className="ghost-chip px-3 py-1.5 text-xs font-medium">
+                Solidity
+              </span>
+              <span className="ghost-chip px-3 py-1.5 text-xs font-medium">
+                Hardhat
+              </span>
+              <span className="ghost-chip px-3 py-1.5 text-xs font-medium">
+                Next.js
+              </span>
+              <span className="ghost-chip px-3 py-1.5 text-xs font-medium">
+                Ethers.js
+              </span>
+              <span className="ghost-chip px-3 py-1.5 text-xs font-medium">
+                IPFS
+              </span>
+            </div>
+          </div>
         </div>
       </footer>
     </div>

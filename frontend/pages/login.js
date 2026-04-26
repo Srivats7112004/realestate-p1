@@ -44,61 +44,143 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="app-shell min-h-screen">
       <Navbar />
-      <div className="max-w-md mx-auto px-4 py-14">
-        <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-100">
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">Login</h1>
-          <p className="text-slate-500 mb-6">Access your BlockEstate account.</p>
 
-          {error ? (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          ) : null}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-              <input
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={handleChange}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500"
-                required
-              />
+      <main className="app-container py-10 md:py-14">
+        <div className="grid items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+          <section className="animate-fadeIn">
+            <div className="page-kicker mb-5">
+              <span className="page-dot" />
+              Secure account access
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-              <input
-                type="password"
-                name="password"
-                value={form.password}
-                onChange={handleChange}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500"
-                required
-              />
+            <h1 className="mb-4 max-w-2xl text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
+              Sign in to continue your BlockEstate workflow
+            </h1>
+
+            <p className="section-subtext max-w-xl text-base md:text-lg">
+              Access your profile, connect the correct wallet, and continue managing
+              listings, approvals, and escrow-based property transactions.
+            </p>
+
+            <div className="mt-8 grid gap-4 sm:grid-cols-3">
+              <div className="soft-stat p-5">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                  Access
+                </div>
+                <div className="text-lg font-bold text-slate-900">
+                  Role-based
+                </div>
+                <p className="mt-2 text-sm text-slate-500">
+                  Dashboards adapt to your assigned app role.
+                </p>
+              </div>
+
+              <div className="soft-stat p-5">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                  Wallet
+                </div>
+                <div className="text-lg font-bold text-sky-700">
+                  Linked
+                </div>
+                <p className="mt-2 text-sm text-slate-500">
+                  Use your connected wallet with your user profile.
+                </p>
+              </div>
+
+              <div className="soft-stat p-5">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                  Workflow
+                </div>
+                <div className="text-lg font-bold text-violet-700">
+                  Live
+                </div>
+                <p className="mt-2 text-sm text-slate-500">
+                  Resume property actions and approval flow instantly.
+                </p>
+              </div>
             </div>
+          </section>
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full rounded-xl bg-indigo-600 text-white py-3 font-semibold hover:bg-indigo-700 disabled:bg-slate-300"
-            >
-              {submitting ? "Logging in..." : "Login"}
-            </button>
-          </form>
+          <section className="animate-fadeIn">
+            <div className="surface-card-strong overflow-hidden">
+              <div className="border-b border-slate-200 bg-gradient-to-r from-sky-50 to-cyan-50 px-6 py-6 md:px-8">
+                <div className="page-kicker mb-3">
+                  <span className="page-dot" />
+                  Welcome back
+                </div>
+                <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+                  Login to your account
+                </h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  Enter your credentials to access your workspace.
+                </p>
+              </div>
 
-          <p className="text-sm text-slate-500 mt-6">
-            Don&apos;t have an account?{" "}
-            <Link href="/register" className="text-indigo-600 font-semibold hover:text-indigo-800">
-              Register
-            </Link>
-          </p>
+              <div className="px-6 py-6 md:px-8 md:py-8">
+                {error ? (
+                  <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {error}
+                  </div>
+                ) : null}
+
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">
+                      Email address
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={form.email}
+                      onChange={handleChange}
+                      placeholder="Enter your email"
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-slate-800 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">
+                      Password
+                    </label>
+                    <input
+                      type="password"
+                      name="password"
+                      value={form.password}
+                      onChange={handleChange}
+                      placeholder="Enter your password"
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-slate-800 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                      required
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="primary-btn w-full px-5 py-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {submitting ? "Signing in..." : "Sign In"}
+                  </button>
+                </form>
+
+                <div className="my-6 grid-divider" />
+
+                <p className="text-sm text-slate-500">
+                  Don&apos;t have an account?{" "}
+                  <Link
+                    href="/register"
+                    className="font-semibold text-sky-700 hover:text-sky-800"
+                  >
+                    Create one now
+                  </Link>
+                </p>
+              </div>
+            </div>
+          </section>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

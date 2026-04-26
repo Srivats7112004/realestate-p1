@@ -1,48 +1,56 @@
-// frontend/components/RoleBadge.js
-
-const roleConfig = {
-  government: {
-    label: "Government",
-    bgColor: "bg-red-100",
-    textColor: "text-red-700",
-    icon: "🏛",
-  },
-  inspector: {
-    label: "Inspector",
-    bgColor: "bg-orange-100",
-    textColor: "text-orange-700",
-    icon: "🔍",
-  },
-  lender: {
-    label: "Lender",
-    bgColor: "bg-blue-100",
-    textColor: "text-blue-700",
-    icon: "🏦",
+const roleStyles = {
+  guest: {
+    label: "Guest",
+    classes: "border-slate-200 bg-slate-50 text-slate-600",
+    dot: "bg-slate-400",
   },
   user: {
     label: "User",
-    bgColor: "bg-green-100",
-    textColor: "text-green-700",
-    icon: "👤",
+    classes: "border-sky-200 bg-sky-50 text-sky-700",
+    dot: "bg-sky-500",
+  },
+  admin: {
+    label: "Admin",
+    classes: "border-violet-200 bg-violet-50 text-violet-700",
+    dot: "bg-violet-500",
+  },
+  inspector: {
+    label: "Inspector",
+    classes: "border-amber-200 bg-amber-50 text-amber-700",
+    dot: "bg-amber-500",
+  },
+  government: {
+    label: "Government",
+    classes: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    dot: "bg-emerald-500",
+  },
+  lender: {
+    label: "Lender",
+    classes: "border-indigo-200 bg-indigo-50 text-indigo-700",
+    dot: "bg-indigo-500",
   },
 };
 
-export default function RoleBadge({ role, size = "sm" }) {
-  const config = roleConfig[role] || roleConfig.user;
+export default function RoleBadge({ role = "guest", compact = false }) {
+  const config = roleStyles[role] || roleStyles.guest;
 
-  const sizeClasses = {
-    xs: "px-2 py-0.5 text-xs",
-    sm: "px-3 py-1 text-sm",
-    md: "px-4 py-1.5 text-base",
-    lg: "px-5 py-2 text-lg",
-  };
+  if (compact) {
+    return (
+      <span
+        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${config.classes}`}
+      >
+        <span className={`h-2 w-2 rounded-full ${config.dot}`} />
+        {config.label}
+      </span>
+    );
+  }
 
   return (
-    <span
-      className={`${config.bgColor} ${config.textColor} ${sizeClasses[size]} rounded-full font-semibold inline-flex items-center gap-1`}
+    <div
+      className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${config.classes}`}
     >
-      <span>{config.icon}</span>
+      <span className={`h-2.5 w-2.5 rounded-full ${config.dot}`} />
       <span>{config.label}</span>
-    </span>
+    </div>
   );
 }

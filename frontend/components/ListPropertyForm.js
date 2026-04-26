@@ -5,6 +5,46 @@ import { createPropertyMetadata, uploadFileToIPFS } from "../utils/pinata";
 import { ESCROW_ADDRESS, PROPERTY_TYPES } from "../utils/constants";
 import KYCBadge from "./KYCBadge";
 
+function FieldLabel({ children, required = false, helper }) {
+  return (
+    <div className="mb-2">
+      <label className="block text-sm font-semibold text-slate-700">
+        {children} {required ? <span className="text-red-500">*</span> : null}
+      </label>
+      {helper ? <p className="mt-1 text-xs text-slate-500">{helper}</p> : null}
+    </div>
+  );
+}
+
+function Input({ className = "", ...props }) {
+  return (
+    <input
+      {...props}
+      className={`w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100 ${className}`}
+    />
+  );
+}
+
+function Textarea({ className = "", ...props }) {
+  return (
+    <textarea
+      {...props}
+      className={`w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100 ${className}`}
+    />
+  );
+}
+
+function Select({ className = "", children, ...props }) {
+  return (
+    <select
+      {...props}
+      className={`w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100 ${className}`}
+    >
+      {children}
+    </select>
+  );
+}
+
 export default function ListPropertyForm({ onSuccess }) {
   const {
     account,
@@ -228,236 +268,356 @@ export default function ListPropertyForm({ onSuccess }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-8 border border-purple-100">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-2xl font-bold text-purple-700">
-          📝 List New Property
-        </h3>
-
-        <label className="flex items-center gap-2 cursor-pointer">
-          <span className="text-sm text-slate-500">
-            {useSimpleMode ? "Simple" : "Advanced"}
-          </span>
-          <div
-            className={`relative w-12 h-6 rounded-full transition cursor-pointer ${
-              useSimpleMode ? "bg-slate-300" : "bg-purple-500"
-            }`}
-            onClick={() => setUseSimpleMode((prev) => !prev)}
-          >
-            <div
-              className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                useSimpleMode ? "left-0.5" : "left-6"
-              }`}
-            />
+    <div className="surface-card-strong overflow-hidden">
+      <div className="border-b border-slate-200 bg-gradient-to-r from-sky-50 to-cyan-50 px-6 py-6 md:px-8">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="page-kicker mb-3">
+              <span className="page-dot" />
+              Seller listing workflow
+            </div>
+            <h3 className="text-2xl font-bold tracking-tight text-slate-900">
+              List a New Property
+            </h3>
+            <p className="mt-2 max-w-2xl text-sm text-slate-600">
+              Upload your property details, mint the asset as an NFT, approve the escrow contract,
+              and publish it to the marketplace in one guided flow.
+            </p>
           </div>
-        </label>
-      </div>
 
-      <div className="mb-4">
-        <KYCBadge address={account} showRequestButton={true} />
-      </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+              Listing Mode
+            </div>
 
-      {linkedWallet && !canUseConnectedWallet ? (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          The connected wallet does not match the wallet linked to your profile.
-          Reconnect the correct wallet before listing a property.
-        </div>
-      ) : null}
+            <button
+              type="button"
+              onClick={() => setUseSimpleMode((prev) => !prev)}
+              className="flex items-center gap-3"
+            >
+              <span
+                className={`text-sm font-semibold ${
+                  useSimpleMode ? "text-slate-500" : "text-sky-700"
+                }`}
+              >
+                Advanced
+              </span>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Property Image *
-          </label>
-          <div className="flex items-start gap-4">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="flex-1 p-2 border rounded-lg text-sm"
-              required
-            />
-            {imagePreview ? (
-              <img
-                src={imagePreview}
-                alt="Preview"
-                className="w-20 h-20 object-cover rounded-lg border"
-              />
-            ) : null}
-          </div>
-        </div>
-
-        {!useSimpleMode ? (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Property Name
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder="e.g. Luxury Villa"
-                  className="w-full p-2.5 border rounded-lg text-sm"
+              <div
+                className={`relative h-7 w-14 rounded-full transition ${
+                  useSimpleMode ? "bg-slate-300" : "bg-sky-500"
+                }`}
+              >
+                <div
+                  className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    useSimpleMode ? "left-1" : "translate-x-7 left-1"
+                  }`}
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Location
-                </label>
-                <input
-                  type="text"
-                  name="location"
-                  value={formData.location}
-                  onChange={handleChange}
-                  placeholder="e.g. Mumbai, India"
-                  className="w-full p-2.5 border rounded-lg text-sm"
-                />
-              </div>
+              <span
+                className={`text-sm font-semibold ${
+                  useSimpleMode ? "text-sky-700" : "text-slate-500"
+                }`}
+              >
+                Simple
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-6 py-6 md:px-8 md:py-8">
+        <div className="mb-6">
+          <KYCBadge address={account} showRequestButton={true} />
+        </div>
+
+        {linkedWallet && !canUseConnectedWallet ? (
+          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
+            <div className="font-semibold">Wallet mismatch detected</div>
+            <div className="mt-1">
+              The connected wallet does not match the wallet linked to your profile.
+              Reconnect the correct wallet before listing a property.
+            </div>
+          </div>
+        ) : null}
+
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {/* Media upload */}
+          <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5 md:p-6">
+            <div className="mb-5">
+              <h4 className="text-lg font-bold text-slate-900">Property Media</h4>
+              <p className="mt-1 text-sm text-slate-500">
+                Upload the main property image and optionally attach supporting documents.
+              </p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description
-              </label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleChange}
-                placeholder="Describe the property..."
-                rows={3}
-                className="w-full p-2.5 border rounded-lg text-sm"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Type
-                </label>
-                <select
-                  name="propertyType"
-                  value={formData.propertyType}
-                  onChange={handleChange}
-                  className="w-full p-2.5 border rounded-lg text-sm bg-white"
+                <FieldLabel
+                  required
+                  helper="Use a clear property image. This will be shown across the marketplace."
                 >
-                  {PROPERTY_TYPES.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
+                  Property Image
+                </FieldLabel>
+
+                <label className="flex min-h-[180px] cursor-pointer flex-col items-center justify-center rounded-[1.25rem] border-2 border-dashed border-slate-300 bg-white px-6 py-8 text-center transition hover:border-sky-400 hover:bg-sky-50/30">
+                  <div className="mb-3 text-4xl">🖼️</div>
+                  <div className="text-sm font-semibold text-slate-700">
+                    {imageFile ? imageFile.name : "Click to upload property image"}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    PNG, JPG, WEBP and other image formats
+                  </div>
+
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                    required
+                  />
+                </label>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Area (sq ft)
-                </label>
-                <input
-                  type="text"
-                  name="area"
-                  value={formData.area}
-                  onChange={handleChange}
-                  placeholder="1500"
-                  className="w-full p-2.5 border rounded-lg text-sm"
-                />
-              </div>
+                <div className="mb-2 text-sm font-semibold text-slate-700">
+                  Image Preview
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Bedrooms
-                </label>
-                <input
-                  type="number"
-                  name="bedrooms"
-                  value={formData.bedrooms}
-                  onChange={handleChange}
-                  placeholder="3"
-                  className="w-full p-2.5 border rounded-lg text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Bathrooms
-                </label>
-                <input
-                  type="number"
-                  name="bathrooms"
-                  value={formData.bathrooms}
-                  onChange={handleChange}
-                  placeholder="2"
-                  className="w-full p-2.5 border rounded-lg text-sm"
-                />
+                <div className="overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white">
+                  {imagePreview ? (
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="h-[180px] w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-[180px] items-center justify-center bg-slate-50 text-sm text-slate-400">
+                      No image selected yet
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Year Built
-                </label>
-                <input
-                  type="text"
-                  name="yearBuilt"
-                  value={formData.yearBuilt}
-                  onChange={handleChange}
-                  placeholder="2020"
-                  className="w-full p-2.5 border rounded-lg text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Property Document (PDF)
-                </label>
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx"
-                  onChange={(e) => setDocumentFile(e.target.files?.[0] || null)}
-                  className="w-full p-2 border rounded-lg text-sm"
-                />
-              </div>
-            </div>
-          </>
-        ) : null}
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Price (ETH) *
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            name="price"
-            value={formData.price}
-            onChange={handleChange}
-            placeholder="e.g. 10"
-            className="w-full p-2.5 border rounded-lg text-sm"
-            required
-          />
-        </div>
-
-        {uploadStep ? (
-          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-center gap-3">
-            <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-            <span className="text-sm text-indigo-700 font-medium">
-              {uploadStep}
-            </span>
           </div>
-        ) : null}
 
-        <button
-          type="submit"
-          disabled={isUploading}
-          className="w-full bg-purple-600 text-white py-3 rounded-lg font-bold hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
-        >
-          {isUploading ? "Processing..." : "🚀 Mint & List Property"}
-        </button>
-      </form>
+          {/* Advanced details */}
+          {!useSimpleMode ? (
+            <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 md:p-6">
+              <div className="mb-5">
+                <h4 className="text-lg font-bold text-slate-900">Property Details</h4>
+                <p className="mt-1 text-sm text-slate-500">
+                  Add richer metadata so the property looks more professional inside the marketplace.
+                </p>
+              </div>
+
+              <div className="grid gap-5 md:grid-cols-2">
+                <div>
+                  <FieldLabel helper="A short title for the property card and detail page.">
+                    Property Name
+                  </FieldLabel>
+                  <Input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="e.g. Luxury Villa in Hyderabad"
+                  />
+                </div>
+
+                <div>
+                  <FieldLabel helper="City, area, or full property location.">
+                    Location
+                  </FieldLabel>
+                  <Input
+                    type="text"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleChange}
+                    placeholder="e.g. Gachibowli, Hyderabad"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <FieldLabel helper="Describe the property, condition, highlights, and key selling points.">
+                  Description
+                </FieldLabel>
+                <Textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  placeholder="Describe the property..."
+                  rows={4}
+                />
+              </div>
+
+              <div className="mt-5 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <FieldLabel>Property Type</FieldLabel>
+                  <Select
+                    name="propertyType"
+                    value={formData.propertyType}
+                    onChange={handleChange}
+                  >
+                    {PROPERTY_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div>
+                  <FieldLabel>Area (sq ft)</FieldLabel>
+                  <Input
+                    type="text"
+                    name="area"
+                    value={formData.area}
+                    onChange={handleChange}
+                    placeholder="1500"
+                  />
+                </div>
+
+                <div>
+                  <FieldLabel>Bedrooms</FieldLabel>
+                  <Input
+                    type="number"
+                    name="bedrooms"
+                    value={formData.bedrooms}
+                    onChange={handleChange}
+                    placeholder="3"
+                  />
+                </div>
+
+                <div>
+                  <FieldLabel>Bathrooms</FieldLabel>
+                  <Input
+                    type="number"
+                    name="bathrooms"
+                    value={formData.bathrooms}
+                    onChange={handleChange}
+                    placeholder="2"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-5 md:grid-cols-2">
+                <div>
+                  <FieldLabel>Year Built</FieldLabel>
+                  <Input
+                    type="text"
+                    name="yearBuilt"
+                    value={formData.yearBuilt}
+                    onChange={handleChange}
+                    placeholder="2020"
+                  />
+                </div>
+
+                <div>
+                  <FieldLabel helper="Optional: upload a PDF or supporting document.">
+                    Property Document
+                  </FieldLabel>
+                  <Input
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    onChange={(e) => setDocumentFile(e.target.files?.[0] || null)}
+                    className="file:mr-4 file:rounded-xl file:border-0 file:bg-sky-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-sky-700"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-[1.5rem] border border-sky-200 bg-sky-50 px-5 py-4 text-sm text-sky-800">
+              <div className="font-semibold">Simple mode enabled</div>
+              <div className="mt-1">
+                Only the image and price are required. Metadata will be kept minimal for quicker listing.
+              </div>
+            </div>
+          )}
+
+          {/* Pricing */}
+          <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5 md:p-6">
+            <div className="mb-5">
+              <h4 className="text-lg font-bold text-slate-900">Pricing</h4>
+              <p className="mt-1 text-sm text-slate-500">
+                Set the listing price in ETH. This value is also used for escrow listing in your current flow.
+              </p>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-[1fr_260px]">
+              <div>
+                <FieldLabel required helper="Enter the property listing price in ETH.">
+                  Price (ETH)
+                </FieldLabel>
+                <Input
+                  type="number"
+                  step="0.01"
+                  name="price"
+                  value={formData.price}
+                  onChange={handleChange}
+                  placeholder="e.g. 10"
+                  required
+                />
+              </div>
+
+              <div className="rounded-[1.25rem] border border-slate-200 bg-white p-4">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                  Workflow Summary
+                </div>
+                <div className="space-y-2 text-sm text-slate-600">
+                  <div>1. Upload to IPFS</div>
+                  <div>2. Mint property NFT</div>
+                  <div>3. Approve escrow contract</div>
+                  <div>4. Publish listing on-chain</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Progress */}
+          {uploadStep ? (
+            <div className="rounded-[1.5rem] border border-sky-200 bg-sky-50 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="h-5 w-5 rounded-full border-2 border-sky-500 border-t-transparent animate-spin" />
+                <div>
+                  <div className="text-sm font-semibold text-sky-800">
+                    Processing listing
+                  </div>
+                  <div className="text-sm text-sky-700">{uploadStep}</div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Actions */}
+          <div className="flex flex-col gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-500">
+              Once submitted, the property will be minted and listed through the connected wallet.
+            </p>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={resetForm}
+                disabled={isUploading}
+                className="secondary-btn px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Reset Form
+              </button>
+
+              <button
+                type="submit"
+                disabled={isUploading}
+                className="primary-btn px-6 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isUploading ? "Processing..." : "Mint & List Property"}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
