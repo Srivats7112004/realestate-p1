@@ -24,8 +24,9 @@ async function main() {
   await escrow.waitForDeployment();
   console.log(`Escrow deployed to: ${escrow.target}`);
 
+  console.log("✅ Deployer automatically has inspector + lender + government roles.");
+  console.log("✅ Passed inspector/lender/government addresses also got their roles.");
   console.log("✅ Contracts deployed successfully.");
-  console.log("✅ Ready for multi-property listing from frontend.");
 }
 
 main().catch((error) => {

@@ -3,13 +3,18 @@ pragma solidity ^0.8.0;
 
 interface IERC721 {
     function transferFrom(address from, address to, uint256 tokenId) external;
+    function ownerOf(uint256 tokenId) external view returns (address);
+    function getApproved(uint256 tokenId) external view returns (address);
+    function isApprovedForAll(address owner, address operator) external view returns (bool);
 }
 
 contract Escrow {
+    address public owner;
     address public nftAddress;
-    address public inspector;
-    address public lender;
-    address public government;
+
+    mapping(address => bool) public inspectors;
+    mapping(address => bool) public lenders;
+    mapping(address => bool) public governments;
 
     struct Listing {
         bool isListed;
@@ -69,37 +74,202 @@ contract Escrow {
         uint256 timestamp
     );
 
+    event OwnershipTransferred(
+        address indexed oldOwner,
+        address indexed newOwner
+    );
+
+    event InspectorRoleGranted(address indexed user);
+    event InspectorRoleRevoked(address indexed user);
+
+    event LenderRoleGranted(address indexed user);
+    event LenderRoleRevoked(address indexed user);
+
+    event GovernmentRoleGranted(address indexed user);
+    event GovernmentRoleRevoked(address indexed user);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner");
+        _;
+    }
+
+    modifier onlyInspector() {
+        require(inspectors[msg.sender], "Only inspector");
+        _;
+    }
+
+    modifier onlyLender() {
+        require(lenders[msg.sender], "Only lender");
+        _;
+    }
+
+    modifier onlyGovernment() {
+        require(governments[msg.sender], "Only government");
+        _;
+    }
+
     constructor(
         address _nftAddress,
         address _inspector,
         address _lender,
         address _government
     ) {
+        require(_nftAddress != address(0), "Invalid NFT address");
+
+        owner = msg.sender;
         nftAddress = _nftAddress;
-        inspector = _inspector;
-        lender = _lender;
-        government = _government;
+
+        // Give deployer all roles by default.
+        // This is very useful for demo/testing so one wallet can do everything.
+        inspectors[msg.sender] = true;
+        lenders[msg.sender] = true;
+        governments[msg.sender] = true;
+
+        emit InspectorRoleGranted(msg.sender);
+        emit LenderRoleGranted(msg.sender);
+        emit GovernmentRoleGranted(msg.sender);
+
+        // Also grant passed role wallets if provided.
+        if (_inspector != address(0) && !inspectors[_inspector]) {
+            inspectors[_inspector] = true;
+            emit InspectorRoleGranted(_inspector);
+        }
+
+        if (_lender != address(0) && !lenders[_lender]) {
+            lenders[_lender] = true;
+            emit LenderRoleGranted(_lender);
+        }
+
+        if (_government != address(0) && !governments[_government]) {
+            governments[_government] = true;
+            emit GovernmentRoleGranted(_government);
+        }
     }
+
+    // -----------------------------
+    // Admin / Role Management
+    // -----------------------------
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid new owner");
+        address oldOwner = owner;
+        owner = newOwner;
+        emit OwnershipTransferred(oldOwner, newOwner);
+    }
+
+    function grantInspector(address user) external onlyOwner {
+        require(user != address(0), "Invalid address");
+        inspectors[user] = true;
+        emit InspectorRoleGranted(user);
+    }
+
+    function revokeInspector(address user) external onlyOwner {
+        require(user != address(0), "Invalid address");
+        inspectors[user] = false;
+        emit InspectorRoleRevoked(user);
+    }
+
+    function grantLender(address user) external onlyOwner {
+        require(user != address(0), "Invalid address");
+        lenders[user] = true;
+        emit LenderRoleGranted(user);
+    }
+
+    function revokeLender(address user) external onlyOwner {
+        require(user != address(0), "Invalid address");
+        lenders[user] = false;
+        emit LenderRoleRevoked(user);
+    }
+
+    function grantGovernment(address user) external onlyOwner {
+        require(user != address(0), "Invalid address");
+        governments[user] = true;
+        emit GovernmentRoleGranted(user);
+    }
+
+    function revokeGovernment(address user) external onlyOwner {
+        require(user != address(0), "Invalid address");
+        governments[user] = false;
+        emit GovernmentRoleRevoked(user);
+    }
+
+    function grantAllRoles(address user) external onlyOwner {
+        require(user != address(0), "Invalid address");
+
+        if (!inspectors[user]) {
+            inspectors[user] = true;
+            emit InspectorRoleGranted(user);
+        }
+
+        if (!lenders[user]) {
+            lenders[user] = true;
+            emit LenderRoleGranted(user);
+        }
+
+        if (!governments[user]) {
+            governments[user] = true;
+            emit GovernmentRoleGranted(user);
+        }
+    }
+
+    function revokeAllRoles(address user) external onlyOwner {
+        require(user != address(0), "Invalid address");
+
+        if (inspectors[user]) {
+            inspectors[user] = false;
+            emit InspectorRoleRevoked(user);
+        }
+
+        if (lenders[user]) {
+            lenders[user] = false;
+            emit LenderRoleRevoked(user);
+        }
+
+        if (governments[user]) {
+            governments[user] = false;
+            emit GovernmentRoleRevoked(user);
+        }
+    }
+
+    function hasAllRoles(address user) external view returns (bool) {
+        return inspectors[user] && lenders[user] && governments[user];
+    }
+
+    // -----------------------------
+    // Marketplace flow
+    // -----------------------------
 
     function list(
         uint256 _nftID,
         uint256 _purchasePrice,
         uint256 _escrowAmount
-    ) public {
+    ) external {
         require(_purchasePrice > 0, "Price must be greater than 0");
         require(_escrowAmount > 0, "Escrow amount must be greater than 0");
+        require(!listings[_nftID].isListed, "Already listed");
 
-        listings[_nftID] = Listing(
-            true,
-            payable(msg.sender),
-            payable(address(0)),
-            _purchasePrice,
-            _escrowAmount,
-            false,
-            false,
-            false,
-            false
+        require(
+            IERC721(nftAddress).ownerOf(_nftID) == msg.sender,
+            "Only owner can list"
         );
+
+        require(
+            IERC721(nftAddress).getApproved(_nftID) == address(this) ||
+                IERC721(nftAddress).isApprovedForAll(msg.sender, address(this)),
+            "Escrow not approved"
+        );
+
+        listings[_nftID] = Listing({
+            isListed: true,
+            seller: payable(msg.sender),
+            buyer: payable(address(0)),
+            purchasePrice: _purchasePrice,
+            escrowAmount: _escrowAmount,
+            inspectionPassed: false,
+            lenderApproved: false,
+            governmentVerified: false,
+            sellerApproved: false
+        });
 
         emit PropertyListed(
             _nftID,
@@ -110,11 +280,13 @@ contract Escrow {
         );
     }
 
-    function depositEarnest(uint256 _nftID) public payable {
+    function depositEarnest(uint256 _nftID) external payable {
         Listing storage item = listings[_nftID];
 
         require(item.isListed, "Property not listed");
+        require(item.seller != address(0), "Listing does not exist");
         require(item.buyer == address(0), "Buyer already assigned");
+        require(msg.sender != item.seller, "Seller cannot buy own property");
         require(msg.value >= item.escrowAmount, "Not enough earnest money");
 
         item.buyer = payable(msg.sender);
@@ -122,20 +294,32 @@ contract Escrow {
         emit EarnestDeposited(_nftID, msg.sender, msg.value, block.timestamp);
     }
 
-    function updateInspectionStatus(uint256 _nftID, bool _passed) public {
-        require(msg.sender == inspector, "Only inspector can update status");
-        require(listings[_nftID].isListed, "Property not listed");
+    function updateInspectionStatus(uint256 _nftID, bool _passed)
+        external
+        onlyInspector
+    {
+        Listing storage item = listings[_nftID];
 
-        listings[_nftID].inspectionPassed = _passed;
+        require(item.isListed, "Property not listed");
+        require(item.seller != address(0), "Listing does not exist");
 
-        emit InspectionStatusUpdated(_nftID, msg.sender, _passed, block.timestamp);
+        item.inspectionPassed = _passed;
+
+        emit InspectionStatusUpdated(
+            _nftID,
+            msg.sender,
+            _passed,
+            block.timestamp
+        );
     }
 
-    function approveSale(uint256 _nftID) public {
+    function approveSale(uint256 _nftID) external {
         Listing storage item = listings[_nftID];
-        require(item.isListed, "Property not listed");
 
-        if (msg.sender == lender) {
+        require(item.isListed, "Property not listed");
+        require(item.seller != address(0), "Listing does not exist");
+
+        if (lenders[msg.sender]) {
             item.lenderApproved = true;
         } else if (msg.sender == item.seller) {
             item.sellerApproved = true;
@@ -152,19 +336,22 @@ contract Escrow {
         );
     }
 
-    function verifyProperty(uint256 _nftID) public {
-        require(msg.sender == government, "Only government can verify");
-        require(listings[_nftID].isListed, "Property not listed");
+    function verifyProperty(uint256 _nftID) external onlyGovernment {
+        Listing storage item = listings[_nftID];
 
-        listings[_nftID].governmentVerified = true;
+        require(item.isListed, "Property not listed");
+        require(item.seller != address(0), "Listing does not exist");
+
+        item.governmentVerified = true;
 
         emit PropertyVerified(_nftID, msg.sender, block.timestamp);
     }
 
-    function finalizeSale(uint256 _nftID) public {
+    function finalizeSale(uint256 _nftID) external {
         Listing storage item = listings[_nftID];
 
         require(item.isListed, "Property not listed");
+        require(item.seller != address(0), "Listing does not exist");
         require(msg.sender == item.seller, "Only seller can finalize sale");
         require(item.buyer != address(0), "Buyer has not deposited funds");
         require(item.inspectionPassed, "Inspection failed");
@@ -187,6 +374,14 @@ contract Escrow {
             item.purchasePrice,
             block.timestamp
         );
+    }
+
+    // Optional emergency recovery for owner if accidental ETH gets stuck.
+    // Comment this out if you do not want owner withdrawal ability.
+    function ownerWithdraw(uint256 amount) external onlyOwner {
+        require(amount <= address(this).balance, "Insufficient balance");
+        (bool success, ) = payable(owner).call{value: amount}("");
+        require(success, "Withdraw failed");
     }
 
     receive() external payable {}

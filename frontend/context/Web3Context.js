@@ -10,7 +10,7 @@ import {
 import { ethers } from "ethers";
 import RealEstateABI from "../abis/RealEstate.json";
 import EscrowABI from "../abis/Escrow.json";
-import { REAL_ESTATE_ADDRESS, ESCROW_ADDRESS, ROLES } from "../utils/constants";
+import { REAL_ESTATE_ADDRESS, ESCROW_ADDRESS } from "../utils/constants";
 import { isZeroAddress, parseTokenMetadata } from "../utils/helpers";
 import { useAuth } from "./AuthContext";
 
@@ -39,13 +39,17 @@ export const Web3Provider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [kycStatus, setKycStatus] = useState({});
 
+  const [contractRoleStatus, setContractRoleStatus] = useState({
+    inspector: false,
+    lender: false,
+    government: false,
+  });
+
   const didInitRef = useRef(false);
   const refreshingRef = useRef(false);
 
   const userRole = user?.role || "guest";
   const linkedWallet = user?.walletAddress || "";
-  const requiredRoleWallet =
-    ["inspector", "government", "lender"].includes(userRole) ? ROLES[userRole] : null;
 
   const isLinkedWalletMatch = useMemo(() => {
     if (!linkedWallet || !account) return false;
@@ -58,16 +62,27 @@ export const Web3Provider = ({ children }) => {
     return isLinkedWalletMatch;
   }, [account, linkedWallet, isLinkedWalletMatch]);
 
+  const requiredRoleWallet = null;
+
   const isSpecialRoleWalletMatch = useMemo(() => {
-    if (!requiredRoleWallet) return true;
     if (!account) return false;
-    return requiredRoleWallet.toLowerCase() === account.toLowerCase();
-  }, [requiredRoleWallet, account]);
+
+    if (userRole === "inspector") return contractRoleStatus.inspector;
+    if (userRole === "lender") return contractRoleStatus.lender;
+    if (userRole === "government") return contractRoleStatus.government;
+
+    return true;
+  }, [account, userRole, contractRoleStatus]);
 
   const canUseRoleWallet = useMemo(() => {
     if (!canUseConnectedWallet) return false;
-    return isSpecialRoleWalletMatch;
-  }, [canUseConnectedWallet, isSpecialRoleWalletMatch]);
+
+    if (userRole === "inspector") return contractRoleStatus.inspector;
+    if (userRole === "lender") return contractRoleStatus.lender;
+    if (userRole === "government") return contractRoleStatus.government;
+
+    return true;
+  }, [canUseConnectedWallet, userRole, contractRoleStatus]);
 
   const buildRuntime = useCallback(async (requestAccounts = false) => {
     if (typeof window === "undefined" || !window.ethereum) {
@@ -109,6 +124,37 @@ export const Web3Provider = ({ children }) => {
     };
   }, []);
 
+  const readContractRoles = useCallback(async (escrowContract, walletAddress) => {
+    if (!escrowContract || !walletAddress) {
+      return {
+        inspector: false,
+        lender: false,
+        government: false,
+      };
+    }
+
+    try {
+      const [inspector, lender, government] = await Promise.all([
+        escrowContract.inspectors(walletAddress),
+        escrowContract.lenders(walletAddress),
+        escrowContract.governments(walletAddress),
+      ]);
+
+      return {
+        inspector: Boolean(inspector),
+        lender: Boolean(lender),
+        government: Boolean(government),
+      };
+    } catch (error) {
+      console.error("Failed to read contract roles:", error);
+      return {
+        inspector: false,
+        lender: false,
+        government: false,
+      };
+    }
+  }, []);
+
   const loadBlockchainData = useCallback(
     async (requestAccounts = false) => {
       if (refreshingRef.current) return;
@@ -137,6 +183,9 @@ export const Web3Provider = ({ children }) => {
         setAccount(nextAccount);
         setRealEstate(realEstateContract);
         setEscrow(escrowContract);
+
+        const roleStatus = await readContractRoles(escrowContract, nextAccount);
+        setContractRoleStatus(roleStatus);
 
         const transferTopic = ethers.utils.id("Transfer(address,address,uint256)");
         const zeroAddressPadded = ethers.utils.hexZeroPad(
@@ -232,7 +281,7 @@ export const Web3Provider = ({ children }) => {
         setLoading(false);
       }
     },
-    [buildRuntime]
+    [buildRuntime, readContractRoles]
   );
 
   const connectWallet = async () => {
@@ -247,6 +296,20 @@ export const Web3Provider = ({ children }) => {
       console.error("Wallet connect failed:", error);
     }
   };
+
+  const refreshRoleStatus = useCallback(async () => {
+    if (!escrow || !account) {
+      setContractRoleStatus({
+        inspector: false,
+        lender: false,
+        government: false,
+      });
+      return;
+    }
+
+    const roleStatus = await readContractRoles(escrow, account);
+    setContractRoleStatus(roleStatus);
+  }, [escrow, account, readContractRoles]);
 
   const loadTransactionHistory = useCallback(
     async (tokenId) => {
@@ -494,6 +557,8 @@ export const Web3Provider = ({ children }) => {
     isSpecialRoleWalletMatch,
     canUseConnectedWallet,
     canUseRoleWallet,
+    contractRoleStatus,
+    refreshRoleStatus,
     connectWallet,
     loadBlockchainData,
     loadTransactionHistory,

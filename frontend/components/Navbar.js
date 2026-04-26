@@ -1,23 +1,26 @@
 import Link from "next/link";
+import { useRouter } from "next/router";
 import { useWeb3 } from "../context/Web3Context";
 import { useAuth } from "../context/AuthContext";
 import { shortenAddress } from "../utils/helpers";
 import RoleBadge from "./RoleBadge";
 
 export default function Navbar() {
+  const router = useRouter();
   const { account, connectWallet } = useWeb3();
   const { user, logout } = useAuth();
 
   const handleLogout = async () => {
     try {
       await logout();
-      window.location.href = "/login";
+      router.push("/login");
     } catch (error) {
       console.error("Logout failed:", error);
     }
   };
 
   const role = user?.role || "guest";
+  const isNormalUser = role === "user" || role === "admin";
 
   return (
     <nav className="bg-white shadow-md px-4 md:px-8 py-4 sticky top-0 z-50">
@@ -37,39 +40,56 @@ export default function Navbar() {
 
           {user ? (
             <>
-              <Link
-                href="/profile"
-                className="text-slate-600 hover:text-indigo-600 font-medium transition"
-              >
-                Profile
-              </Link>
+              {isNormalUser ? (
+                <>
+                  <Link
+                    href="/dashboard/seller"
+                    className="text-slate-600 hover:text-purple-600 font-medium transition"
+                  >
+                    Seller Dashboard
+                  </Link>
+                  <Link
+                    href="/dashboard/buyer"
+                    className="text-slate-600 hover:text-indigo-600 font-medium transition"
+                  >
+                    Buyer Dashboard
+                  </Link>
+                </>
+              ) : null}
 
-              {role === "inspector" && (
+              {role === "inspector" ? (
                 <Link
                   href="/dashboard/inspector"
                   className="text-slate-600 hover:text-orange-600 font-medium transition"
                 >
                   Inspector Dashboard
                 </Link>
-              )}
+              ) : null}
 
-              {role === "government" && (
+              {role === "government" ? (
                 <Link
                   href="/dashboard/government"
                   className="text-slate-600 hover:text-red-600 font-medium transition"
                 >
                   Government Dashboard
                 </Link>
-              )}
+              ) : null}
 
-              {role === "lender" && (
+              {role === "lender" ? (
                 <Link
                   href="/dashboard/lender"
                   className="text-slate-600 hover:text-blue-600 font-medium transition"
                 >
                   Lender Dashboard
                 </Link>
-              )}
+              ) : null}
+
+              <Link
+                href="/profile"
+                className="text-slate-600 hover:text-indigo-600 font-medium transition"
+              >
+                Profile
+              </Link>
             </>
           ) : (
             <>

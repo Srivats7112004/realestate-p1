@@ -8,6 +8,47 @@ import TransactionHistory from "../../components/TransactionHistory";
 import AIInspectionPanel from "../../components/AIInspectionPanel";
 import { shortenAddress, isZeroAddress } from "../../utils/helpers";
 
+function RoleStatusBanner({ userRole, contractRoleStatus }) {
+  if (!["government", "inspector", "lender"].includes(userRole)) return null;
+
+  const hasRole =
+    (userRole === "government" && contractRoleStatus.government) ||
+    (userRole === "inspector" && contractRoleStatus.inspector) ||
+    (userRole === "lender" && contractRoleStatus.lender);
+
+  if (hasRole) {
+    return (
+      <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+        Connected wallet has <strong>{userRole.toUpperCase()}</strong> role on-chain.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+      Your app role is <strong>{userRole}</strong>, but the connected wallet does not currently have{" "}
+      <strong>{userRole}</strong> permission on-chain.
+    </div>
+  );
+}
+
+function StatusPill({ children, tone = "default" }) {
+  const tones = {
+    green: "bg-green-100 text-green-700",
+    amber: "bg-amber-100 text-amber-700",
+    red: "bg-red-100 text-red-700",
+    blue: "bg-blue-100 text-blue-700",
+    slate: "bg-slate-100 text-slate-600",
+    default: "bg-slate-100 text-slate-700",
+  };
+
+  return (
+    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${tones[tone] || tones.default}`}>
+      {children}
+    </span>
+  );
+}
+
 export default function PropertyDetail() {
   const router = useRouter();
   const { id } = router.query;
@@ -20,7 +61,7 @@ export default function PropertyDetail() {
     userRole,
     canUseConnectedWallet,
     canUseRoleWallet,
-    requiredRoleWallet,
+    contractRoleStatus,
     loadBlockchainData,
     loadTransactionHistory,
     runAIInspection,
@@ -63,15 +104,43 @@ export default function PropertyDetail() {
     return account.toLowerCase() === property.seller.toLowerCase();
   }, [property, account]);
 
+  const isBuyer = useMemo(() => {
+    if (!property || !account || !property.buyer || isZeroAddress(property.buyer)) return false;
+    return account.toLowerCase() === property.buyer.toLowerCase();
+  }, [property, account]);
+
+  const isOwner = useMemo(() => {
+    if (!property || !account || !property.currentOwner) return false;
+    return account.toLowerCase() === property.currentOwner.toLowerCase();
+  }, [property, account]);
+
   const isNormalUser = userRole === "user" || userRole === "admin";
 
   const canActAsSeller = isNormalUser && isSeller && canUseConnectedWallet;
   const canActAsBuyer =
-    isNormalUser && !isSeller && !property?.sold && canUseConnectedWallet;
+    isNormalUser &&
+    !isSeller &&
+    !property?.sold &&
+    !buyerExists &&
+    canUseConnectedWallet;
 
-  const showSpecialRoleWarning = useMemo(() => {
-    return ["government", "inspector", "lender"].includes(userRole) && !canUseRoleWallet;
-  }, [userRole, canUseRoleWallet]);
+  const saleStatusText = useMemo(() => {
+    if (!property) return "Loading";
+    if (property.sold) return "Sold";
+    if (buyerExists) return "In Progress";
+    return "Available";
+  }, [property, buyerExists]);
+
+  const sellerCanFinalize = useMemo(() => {
+    if (!property) return false;
+    return (
+      buyerExists &&
+      property.governmentVerified &&
+      property.inspectionPassed &&
+      property.lenderApproved &&
+      !property.sold
+    );
+  }, [property, buyerExists]);
 
   const handleAction = async (action) => {
     try {
@@ -81,11 +150,7 @@ export default function PropertyDetail() {
       }
 
       if (["verify", "inspect", "lend"].includes(action) && !canUseRoleWallet) {
-        alert(
-          requiredRoleWallet
-            ? `Your app role is ${userRole}, but the current smart contract still requires the configured ${userRole} wallet:\n${requiredRoleWallet}`
-            : "You cannot perform this action with the currently connected wallet."
-        );
+        alert(`The connected wallet does not currently have ${userRole.toUpperCase()} permission on-chain.`);
         return;
       }
 
@@ -132,6 +197,11 @@ export default function PropertyDetail() {
         }
 
         case "sell": {
+          if (!sellerCanFinalize) {
+            alert("Sale is not ready to finalize yet.");
+            return;
+          }
+
           let tx = await escrow.connect(signer).approveSale(property.id);
           await tx.wait();
 
@@ -194,7 +264,7 @@ export default function PropertyDetail() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-lg overflow-hidden relative">
               <img
                 src={property.image}
                 alt={property.name}
@@ -204,10 +274,17 @@ export default function PropertyDetail() {
                     "https://via.placeholder.com/800x400?text=Property+Image";
                 }}
               />
+
+              <div className="absolute top-4 left-4 flex flex-wrap gap-2">
+                {property.sold ? <StatusPill tone="green">🎉 Sold</StatusPill> : null}
+                {!property.sold && buyerExists ? <StatusPill tone="amber">⏳ In Progress</StatusPill> : null}
+                {!property.sold && !buyerExists ? <StatusPill tone="blue">📋 Available</StatusPill> : null}
+                {property.governmentVerified ? <StatusPill tone="green">🏛 Verified</StatusPill> : null}
+              </div>
             </div>
 
             <div className="bg-white rounded-2xl shadow-lg p-8">
-              <div className="flex items-start justify-between mb-4">
+              <div className="flex items-start justify-between mb-4 gap-4">
                 <div>
                   <h1 className="text-3xl font-bold text-slate-800">
                     {property.name || `Property #${property.id}`}
@@ -252,6 +329,22 @@ export default function PropertyDetail() {
                     </div>
                   </div>
                 )}
+
+                <div className="bg-slate-50 p-3 rounded-lg text-center">
+                  <div className="text-lg">🧾</div>
+                  <div className="text-xs text-slate-500">Status</div>
+                  <div className="text-sm font-semibold text-slate-700">
+                    {saleStatusText}
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-3 rounded-lg text-center">
+                  <div className="text-lg">#️⃣</div>
+                  <div className="text-xs text-slate-500">Token ID</div>
+                  <div className="text-sm font-semibold text-slate-700">
+                    #{property.id}
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-2 text-sm">
@@ -270,6 +363,13 @@ export default function PropertyDetail() {
                 </div>
 
                 <div className="flex justify-between py-2 border-b border-slate-100">
+                  <span className="text-slate-500">Current Owner</span>
+                  <span className="font-mono text-slate-700">
+                    {shortenAddress(property.currentOwner)}
+                  </span>
+                </div>
+
+                <div className="flex justify-between py-2 border-b border-slate-100">
                   <span className="text-slate-500">Escrow Amount</span>
                   <span className="font-semibold text-slate-700">
                     {ethers.utils.formatEther(property.escrowAmount)} ETH
@@ -277,8 +377,14 @@ export default function PropertyDetail() {
                 </div>
 
                 <div className="flex justify-between py-2">
-                  <span className="text-slate-500">Token ID</span>
-                  <span className="font-semibold text-slate-700">#{property.id}</span>
+                  <span className="text-slate-500">Ownership Note</span>
+                  <span className="text-right font-medium text-slate-700">
+                    {isOwner
+                      ? "This property is currently owned by your connected wallet"
+                      : property.sold
+                      ? "Ownership has already transferred to the buyer"
+                      : "Ownership still remains with the seller"}
+                  </span>
                 </div>
               </div>
 
@@ -310,18 +416,10 @@ export default function PropertyDetail() {
           </div>
 
           <div className="space-y-6">
-            {showSpecialRoleWarning ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                Your app role is <strong>{userRole}</strong>, but this smart contract still
-                requires the configured on-chain role wallet for the final action.
-                {requiredRoleWallet ? (
-                  <>
-                    <br />
-                    <span className="font-semibold">Required wallet:</span> {requiredRoleWallet}
-                  </>
-                ) : null}
-              </div>
-            ) : null}
+            <RoleStatusBanner
+              userRole={userRole}
+              contractRoleStatus={contractRoleStatus}
+            />
 
             <div className="bg-white rounded-2xl shadow-lg p-6">
               <h3 className="text-lg font-bold text-slate-700 mb-4">📊 Sale Status</h3>
@@ -335,17 +433,17 @@ export default function PropertyDetail() {
                 {userRole === "government" && (
                   <button
                     onClick={() => handleAction("verify")}
-                    disabled={property.governmentVerified || !canUseRoleWallet}
+                    disabled={property.governmentVerified || !contractRoleStatus.government}
                     className="w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
                   >
-                    {property.governmentVerified ? "✅ Already Verified" : "🏛 Verify Ownership"}
+                    {property.governmentVerified ? "✅ Already Verified" : "🏛 Verify Property"}
                   </button>
                 )}
 
                 {userRole === "inspector" && (
                   <button
                     onClick={() => handleAction("inspect")}
-                    disabled={property.inspectionPassed || !canUseRoleWallet}
+                    disabled={property.inspectionPassed || !contractRoleStatus.inspector}
                     className="w-full bg-orange-500 text-white py-3 rounded-lg font-semibold hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
                   >
                     {property.inspectionPassed ? "✅ Inspection Passed" : "🔍 Approve Inspection"}
@@ -355,7 +453,7 @@ export default function PropertyDetail() {
                 {userRole === "lender" && (
                   <button
                     onClick={() => handleAction("lend")}
-                    disabled={property.lenderApproved || !canUseRoleWallet}
+                    disabled={property.lenderApproved || !buyerExists || !contractRoleStatus.lender}
                     className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
                   >
                     {property.lenderApproved ? "✅ Loan Approved" : "🏦 Approve Loan"}
@@ -365,29 +463,41 @@ export default function PropertyDetail() {
                 {canActAsSeller && (
                   <button
                     onClick={() => handleAction("sell")}
-                    disabled={!canActAsSeller}
+                    disabled={!sellerCanFinalize}
                     className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
                   >
-                    ✍️ Approve & Finalize Sale
+                    {property.sold ? "🎉 Already Sold" : "✍️ Approve & Finalize Sale"}
                   </button>
                 )}
 
                 {canActAsBuyer && (
                   <button
                     onClick={() => handleAction("buy")}
-                    disabled={buyerExists || !canActAsBuyer}
+                    disabled={buyerExists}
                     className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
                   >
-                    {buyerExists ? "✅ Buyer Already Funded" : `💰 Buy for ${property.price} ETH`}
+                    {buyerExists ? "✅ Buyer Already Assigned" : `💰 Buy for ${property.price} ETH`}
                   </button>
                 )}
+
+                {isBuyer && property.sold ? (
+                  <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
+                    You are the recorded buyer and current owner of this property.
+                  </div>
+                ) : null}
+
+                {isSeller && property.sold ? (
+                  <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
+                    You listed this property and the sale has been completed successfully.
+                  </div>
+                ) : null}
               </div>
             </div>
 
             <div className="bg-white rounded-2xl shadow-lg p-6">
               <h3 className="text-lg font-bold text-slate-700 mb-4">🖼 NFT Details</h3>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-3">
                   <span className="text-slate-500">Token URI</span>
                   <a
                     href={property.uri}

@@ -1,18 +1,51 @@
 import { useMemo, useState } from "react";
+import { useRouter } from "next/router";
 import Navbar from "../components/Navbar";
 import AuthGuard from "../components/AuthGuard";
 import { useAuth } from "../context/AuthContext";
 import { useWeb3 } from "../context/Web3Context";
 
+const getRouteForRole = (role) => {
+  switch (role) {
+    case "inspector":
+      return "/dashboard/inspector";
+    case "government":
+      return "/dashboard/government";
+    case "lender":
+      return "/dashboard/lender";
+    case "user":
+    case "admin":
+      return "/dashboard/seller";
+    default:
+      return "/profile";
+  }
+};
+
+function RolePill({ label, enabled }) {
+  return (
+    <span
+      className={`px-3 py-1 rounded-full text-xs font-semibold ${
+        enabled
+          ? "bg-green-100 text-green-700"
+          : "bg-slate-100 text-slate-500"
+      }`}
+    >
+      {label}: {enabled ? "Yes" : "No"}
+    </span>
+  );
+}
+
 function ProfileContent() {
+  const router = useRouter();
   const { user, logout, linkWallet, switchRole } = useAuth();
   const {
     account,
     connectWallet,
     linkedWallet,
     isLinkedWalletMatch,
-    requiredRoleWallet,
-    isSpecialRoleWalletMatch,
+    loadBlockchainData,
+    refreshRoleStatus,
+    contractRoleStatus,
   } = useWeb3();
 
   const [message, setMessage] = useState("");
@@ -36,6 +69,8 @@ function ProfileContent() {
       setLinking(true);
       setMessage("");
       await linkWallet(account);
+      await loadBlockchainData(false);
+      await refreshRoleStatus();
       setMessage("Wallet linked successfully.");
     } catch (error) {
       setMessage(error.message || "Wallet linking failed.");
@@ -49,7 +84,12 @@ function ProfileContent() {
       setSwitchingRole(role);
       setMessage("");
       await switchRole(role);
-      setMessage(`Role switched to ${role}.`);
+      await loadBlockchainData(false);
+      await refreshRoleStatus();
+      setMessage(
+        `Role switched to ${role}. Dashboard access changed. On-chain permissions still depend on whether the connected wallet has that role in the Escrow contract.`
+      );
+      router.push(getRouteForRole(role));
     } catch (error) {
       setMessage(error.message || "Role switch failed.");
     } finally {
@@ -60,11 +100,21 @@ function ProfileContent() {
   const handleLogout = async () => {
     try {
       await logout();
-      window.location.href = "/login";
+      router.push("/login");
     } catch (error) {
       setMessage(error.message || "Logout failed.");
     }
   };
+
+  const connectedWalletRoleSummary = useMemo(() => {
+    const roles = [];
+    if (contractRoleStatus.inspector) roles.push("Inspector");
+    if (contractRoleStatus.lender) roles.push("Lender");
+    if (contractRoleStatus.government) roles.push("Government");
+
+    if (roles.length === 0) return "No special on-chain roles";
+    return roles.join(", ");
+  }, [contractRoleStatus]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -74,7 +124,7 @@ function ProfileContent() {
         <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-100">
           <h1 className="text-3xl font-bold text-slate-800 mb-2">My Profile</h1>
           <p className="text-slate-500 mb-8">
-            App role now controls dashboards and permissions. Wallet is only for signing transactions.
+            App role controls dashboard access. On-chain permissions come from the Escrow contract roles attached to the connected wallet.
           </p>
 
           {message ? (
@@ -118,7 +168,7 @@ function ProfileContent() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 p-6">
-              <h2 className="text-lg font-semibold text-slate-800 mb-4">Wallet Status</h2>
+              <h2 className="text-lg font-semibold text-slate-800 mb-4">Wallet & Contract Role Status</h2>
 
               <div className="space-y-4 text-sm">
                 <div>
@@ -129,23 +179,22 @@ function ProfileContent() {
                 </div>
 
                 <div>
-                  <div className="text-slate-400">Status</div>
+                  <div className="text-slate-400">Wallet link status</div>
                   <div className="font-medium text-slate-700">{walletStatus}</div>
                 </div>
 
-                {requiredRoleWallet ? (
-                  <div>
-                    <div className="text-slate-400">Required on-chain role wallet</div>
-                    <div className="font-medium text-slate-700 break-all">
-                      {requiredRoleWallet}
-                    </div>
-                    <div className={`mt-1 text-sm ${isSpecialRoleWalletMatch ? "text-green-600" : "text-amber-600"}`}>
-                      {isSpecialRoleWalletMatch
-                        ? "Connected wallet matches the contract role wallet."
-                        : "Your app role is correct, but the contract will still require the configured role wallet for special on-chain actions."}
-                    </div>
+                <div>
+                  <div className="text-slate-400 mb-2">On-chain role summary</div>
+                  <div className="font-medium text-slate-700">
+                    {connectedWalletRoleSummary}
                   </div>
-                ) : null}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <RolePill label="Inspector" enabled={contractRoleStatus.inspector} />
+                  <RolePill label="Lender" enabled={contractRoleStatus.lender} />
+                  <RolePill label="Government" enabled={contractRoleStatus.government} />
+                </div>
 
                 <button
                   onClick={connectWallet}
@@ -163,6 +212,14 @@ function ProfileContent() {
                 </button>
 
                 <button
+                  onClick={refreshRoleStatus}
+                  disabled={!account}
+                  className="w-full rounded-xl border border-slate-300 text-slate-700 py-3 font-semibold hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400 transition"
+                >
+                  Refresh On-chain Role Status
+                </button>
+
+                <button
                   onClick={handleLogout}
                   className="w-full rounded-xl border border-red-300 text-red-600 py-3 font-semibold hover:bg-red-50 transition"
                 >
@@ -177,7 +234,7 @@ function ProfileContent() {
           <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-100">
             <h2 className="text-2xl font-bold text-slate-800 mb-2">Dev Role Switcher</h2>
             <p className="text-slate-500 mb-6">
-              Use this only for local testing. This changes app role access without changing MetaMask account.
+              This only changes the app role and redirect target. It does not grant blockchain permissions by itself.
             </p>
 
             <div className="flex flex-wrap gap-3">

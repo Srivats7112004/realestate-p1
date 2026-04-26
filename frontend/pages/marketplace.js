@@ -1,185 +1,104 @@
-// frontend/pages/marketplace.js
-import { useState, useEffect, useCallback } from 'react';
-import { ethers } from 'ethers';
-import Layout from '../components/Layout';
-import PropertyCard from '../components/PropertyCard';
-import { useWeb3 } from '../context/Web3Context';
+import { useMemo, useState } from "react";
+import Navbar from "../components/Navbar";
+import PropertyCard from "../components/PropertyCard";
+import { useWeb3 } from "../context/Web3Context";
 
 export default function Marketplace() {
-  const { account, provider, signer, realEstate, escrow, loadBlockchainData } = useWeb3();
-  const [properties, setProperties] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // all, verified, pending
+  const { provider, escrow, properties, loading, loadBlockchainData } = useWeb3();
+  const [filter, setFilter] = useState("all");
 
-  const loadProperties = useCallback(async () => {
-    if (!realEstate || !escrow) return;
-
-    setLoading(true);
+  const handleAction = async (action, property) => {
     try {
-      // Use Transfer events instead of totalSupply()
-      const mintFilter = realEstate.filters.Transfer(
-        ethers.constants.AddressZero,
-        null
-      );
-      const mintEvents = await realEstate.queryFilter(mintFilter, 0, "latest");
-
-      const tokenIds = [
-        ...new Set(
-          mintEvents
-            .map((event) => event.args?.tokenId?.toNumber?.())
-            .filter(Boolean)
-        ),
-      ].sort((a, b) => a - b);
-
-      const loadedProperties = [];
-
-      for (const tokenId of tokenIds) {
-        try {
-          const listing = await escrow.listings(tokenId);
-
-          if (listing.isListed) {
-            const uri = await realEstate.tokenURI(tokenId);
-            const owner = await realEstate.ownerOf(tokenId);
-
-            loadedProperties.push({
-              id: tokenId,
-              uri,
-              image: uri,
-              price: ethers.utils.formatEther(listing.purchasePrice),
-              purchasePrice: listing.purchasePrice,
-              escrowAmount: listing.escrowAmount,
-              seller: listing.seller,
-              buyer: listing.buyer,
-              inspectionPassed: listing.inspectionPassed,
-              lenderApproved: listing.lenderApproved,
-              governmentVerified: listing.governmentVerified,
-              sellerApproved: listing.sellerApproved,
-              currentOwner: owner,
-            });
-          }
-        } catch (err) {
-          console.log(`Skipping token ${tokenId}:`, err.message);
-        }
+      if (!provider || !escrow) {
+        alert("Wallet or contract not ready.");
+        return;
       }
 
-      setProperties(loadedProperties);
-    } catch (error) {
-      console.error("Error loading properties:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [realEstate, escrow]);
+      const signer = provider.getSigner();
 
-  useEffect(() => {
-    if (realEstate && escrow) {
-      loadProperties();
-    }
-  }, [realEstate, escrow, loadProperties]);
+      switch (action) {
+        case "buy": {
+          const tx = await escrow.connect(signer).depositEarnest(property.id, {
+            value: property.purchasePrice,
+          });
+          await tx.wait();
+          alert("Payment deposited successfully!");
+          break;
+        }
+        case "inspect": {
+          const tx = await escrow.connect(signer).updateInspectionStatus(property.id, true);
+          await tx.wait();
+          alert("Inspection approved!");
+          break;
+        }
+        case "lend": {
+          const tx = await escrow.connect(signer).approveSale(property.id);
+          await tx.wait();
+          alert("Loan approved!");
+          break;
+        }
+        case "verify": {
+          const tx = await escrow.connect(signer).verifyProperty(property.id);
+          await tx.wait();
+          alert("Property verified!");
+          break;
+        }
+        case "sell": {
+          let tx = await escrow.connect(signer).approveSale(property.id);
+          await tx.wait();
 
-  const handleBuy = async (property) => {
-    try {
-      const tx = await escrow.connect(signer).depositEarnest(property.id, {
-        value: property.purchasePrice
-      });
-      await tx.wait();
-      alert("Payment deposited successfully!");
-      loadProperties();
-      await loadBlockchainData();
+          tx = await escrow.connect(signer).finalizeSale(property.id);
+          await tx.wait();
+
+          alert("Sale completed!");
+          break;
+        }
+        default:
+          break;
+      }
+
+      await loadBlockchainData(false);
     } catch (error) {
-      console.error("Buy failed:", error);
-      alert(error?.reason || error?.message || "Buy failed.");
+      console.error(`${action} failed:`, error);
+      alert(error?.reason || error?.message || `${action} failed.`);
     }
   };
 
-  const handleInspect = async (propertyId) => {
-    try {
-      const tx = await escrow.connect(signer).updateInspectionStatus(propertyId, true);
-      await tx.wait();
-      alert("Inspection approved!");
-      loadProperties();
-      await loadBlockchainData();
-    } catch (error) {
-      console.error("Inspection failed:", error);
-      alert(error?.reason || error?.message || "Inspection failed.");
-    }
-  };
-
-  const handleLend = async (propertyId) => {
-    try {
-      const tx = await escrow.connect(signer).approveSale(propertyId);
-      await tx.wait();
-      alert("Loan approved!");
-      loadProperties();
-      await loadBlockchainData();
-    } catch (error) {
-      console.error("Lender approval failed:", error);
-      alert(error?.reason || error?.message || "Lender approval failed.");
-    }
-  };
-
-  const handleVerify = async (propertyId) => {
-    try {
-      const tx = await escrow.connect(signer).verifyProperty(propertyId);
-      await tx.wait();
-      alert("Property verified!");
-      loadProperties();
-      await loadBlockchainData();
-    } catch (error) {
-      console.error("Verification failed:", error);
-      alert(error?.reason || error?.message || "Verification failed.");
-    }
-  };
-
-  const handleSell = async (propertyId) => {
-    try {
-      let tx = await escrow.connect(signer).approveSale(propertyId);
-      await tx.wait();
-      
-      tx = await escrow.connect(signer).finalizeSale(propertyId);
-      await tx.wait();
-      
-      alert("Sale completed!");
-      loadProperties();
-      await loadBlockchainData();
-    } catch (error) {
-      console.error("Sale failed:", error);
-      alert(error?.reason || error?.message || "Sale failed.");
-    }
-  };
-
-  const filteredProperties = properties.filter(p => {
-    if (filter === 'verified') return p.governmentVerified;
-    if (filter === 'pending') return !p.governmentVerified;
-    return true;
-  });
+  const filteredProperties = useMemo(() => {
+    return properties.filter((property) => {
+      if (filter === "verified") return property.governmentVerified;
+      if (filter === "pending") return !property.governmentVerified;
+      return true;
+    });
+  }, [properties, filter]);
 
   return (
-    <Layout title="Marketplace">
+    <div className="min-h-screen bg-slate-50">
+      <Navbar />
+
       <div className="max-w-7xl mx-auto px-4 py-12">
-        {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-800 mb-4">
             🏠 Property Marketplace
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Browse verified properties and make secure blockchain-based transactions
+            Browse verified properties and track each stage of the blockchain escrow flow.
           </p>
         </div>
 
-        {/* Filters */}
         <div className="flex flex-wrap justify-center gap-4 mb-8">
           {[
-            { key: 'all', label: '📋 All Properties' },
-            { key: 'verified', label: '✅ Verified Only' },
-            { key: 'pending', label: '⏳ Pending Verification' },
+            { key: "all", label: "📋 All Properties" },
+            { key: "verified", label: "✅ Verified Only" },
+            { key: "pending", label: "⏳ Pending Verification" },
           ].map(({ key, label }) => (
             <button
               key={key}
               onClick={() => setFilter(key)}
               className={`px-6 py-2 rounded-full font-medium transition ${
                 filter === key
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white text-gray-600 hover:bg-gray-100'
+                  ? "bg-indigo-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-100"
               }`}
             >
               {label}
@@ -187,7 +106,6 @@ export default function Marketplace() {
           ))}
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-8 max-w-md mx-auto">
           <div className="bg-white rounded-xl p-4 text-center shadow">
             <p className="text-2xl font-bold text-gray-800">{properties.length}</p>
@@ -195,19 +113,18 @@ export default function Marketplace() {
           </div>
           <div className="bg-white rounded-xl p-4 text-center shadow">
             <p className="text-2xl font-bold text-emerald-600">
-              {properties.filter(p => p.governmentVerified).length}
+              {properties.filter((p) => p.governmentVerified).length}
             </p>
             <p className="text-sm text-gray-500">Verified</p>
           </div>
           <div className="bg-white rounded-xl p-4 text-center shadow">
             <p className="text-2xl font-bold text-amber-600">
-              {properties.filter(p => !p.governmentVerified).length}
+              {properties.filter((p) => !p.governmentVerified).length}
             </p>
             <p className="text-sm text-gray-500">Pending</p>
           </div>
         </div>
 
-        {/* Properties Grid */}
         {loading ? (
           <div className="flex justify-center items-center py-20">
             <svg className="animate-spin h-12 w-12 text-indigo-600" viewBox="0 0 24 24">
@@ -221,11 +138,7 @@ export default function Marketplace() {
               <PropertyCard
                 key={property.id}
                 property={property}
-                onBuy={handleBuy}
-                onInspect={handleInspect}
-                onLend={handleLend}
-                onVerify={handleVerify}
-                onSell={handleSell}
+                onAction={handleAction}
               />
             ))}
           </div>
@@ -236,13 +149,13 @@ export default function Marketplace() {
               No Properties Found
             </h3>
             <p className="text-gray-600">
-              {filter !== 'all' 
-                ? 'Try changing your filter settings'
-                : 'Be the first to list a property!'}
+              {filter !== "all"
+                ? "Try changing your filter settings"
+                : "Be the first to list a property!"}
             </p>
           </div>
         )}
       </div>
-    </Layout>
+    </div>
   );
 }

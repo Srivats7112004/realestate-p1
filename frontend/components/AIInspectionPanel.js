@@ -15,7 +15,11 @@ export default function AIInspectionPanel({
   report,
   loading,
   error,
+  actionLoading,
   onRun,
+  onApprove,
+  onReject,
+  canApprove = true,
 }) {
   return (
     <div className="bg-white rounded-2xl shadow-lg p-6 border border-orange-100">
@@ -125,6 +129,23 @@ export default function AIInspectionPanel({
                 ))}
               </ul>
             </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3 pt-2">
+            <button
+              onClick={() => onApprove?.(property)}
+              disabled={!canApprove || actionLoading}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition"
+            >
+              {actionLoading ? "Submitting..." : "Approve On-chain"}
+            </button>
+            <button
+              onClick={() => onReject?.(property)}
+              disabled={!canApprove || actionLoading}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition"
+            >
+              {actionLoading ? "Submitting..." : "Reject On-chain"}
+            </button>
           </div>
         </div>
       )}

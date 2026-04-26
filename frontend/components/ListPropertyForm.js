@@ -71,14 +71,25 @@ export default function ListPropertyForm({ onSuccess }) {
     setImagePreview(null);
   };
 
-  const extractTokenIdFromReceipt = (receipt, contract) => {
-    if (!receipt?.logs?.length) return null;
+  const extractTokenIdFromReceipt = async (receipt, contract) => {
+    const contractAddress = contract.address?.toLowerCase?.();
 
-    for (const log of receipt.logs) {
+    const eventMatch = (receipt?.events || []).find((event) => {
+      return (
+        event?.event === "Transfer" &&
+        event?.address?.toLowerCase?.() === contractAddress
+      );
+    });
+
+    const tokenFromEvent = eventMatch?.args?.tokenId ?? eventMatch?.args?.[2];
+    if (tokenFromEvent) {
+      return tokenFromEvent.toString();
+    }
+
+    for (const log of receipt?.logs || []) {
       try {
         const parsed = contract.interface.parseLog(log);
-
-        if (parsed && parsed.name === "Transfer") {
+        if (parsed?.name === "Transfer") {
           const tokenId = parsed.args?.tokenId ?? parsed.args?.[2];
           if (tokenId) {
             return tokenId.toString();
@@ -87,6 +98,15 @@ export default function ListPropertyForm({ onSuccess }) {
       } catch {
         // Ignore unrelated logs
       }
+    }
+
+    try {
+      const latestTokenId = await contract.totalSupply();
+      if (latestTokenId && latestTokenId.toString() !== "0") {
+        return latestTokenId.toString();
+      }
+    } catch {
+      // Ignore fallback failure
     }
 
     return null;
@@ -163,7 +183,7 @@ export default function ListPropertyForm({ onSuccess }) {
       const mintTx = await realEstate.connect(signer).mint(tokenURI);
       const mintReceipt = await mintTx.wait();
 
-      const tokenId = extractTokenIdFromReceipt(mintReceipt, realEstate);
+      const tokenId = await extractTokenIdFromReceipt(mintReceipt, realEstate);
 
       if (!tokenId) {
         throw new Error(
